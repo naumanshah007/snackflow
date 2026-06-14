@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SnackFlow User Handover Manual</title>
+    <style>
+      :root { --orange:#F97316; --green:#16A34A; --navy:#0F172A; --light:#F8FAFC; }
+      body { margin:0; font-family: Inter, Arial, sans-serif; background:var(--light); color:var(--navy); line-height:1.55; }
+      .cover { background:linear-gradient(135deg,var(--navy),#14532d); color:white; padding:56px; }
+      .logo { max-width:300px; background:white; padding:14px; border-radius:8px; }
+      .wrap { max-width:1100px; margin:0 auto; padding:32px; }
+      h1 { font-size:42px; margin:32px 0 8px; }
+      h2 { border-left:6px solid var(--orange); padding-left:14px; margin-top:42px; }
+      h3 { color:#1f2937; }
+      .tag { color:#fed7aa; font-weight:700; text-transform:uppercase; font-size:13px; }
+      .card { background:white; border:1px solid #e2e8f0; border-radius:8px; padding:18px; margin:16px 0; box-shadow:0 10px 30px rgba(15,23,42,.08); }
+      .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }
+      .metric { background:#0f172a; color:white; border-radius:8px; padding:18px; }
+      .callout { border-left:6px solid var(--green); background:#f0fdf4; padding:14px 18px; border-radius:8px; }
+      .warn { border-left:6px solid var(--orange); background:#fff7ed; padding:14px 18px; border-radius:8px; }
+      table { width:100%; border-collapse:collapse; background:white; border-radius:8px; overflow:hidden; margin:16px 0; }
+      th { background:var(--navy); color:white; text-align:left; }
+      th,td { padding:12px; border-bottom:1px solid #e2e8f0; vertical-align:top; }
+      footer { text-align:center; color:#64748b; padding:32px; }
+      @media print { body{background:white;} .card{box-shadow:none;} }
+    </style>
+  </head>
+  <body>
+    <section class="cover">
+      <img class="logo" src="../../frontend/public/logo.png" alt="SnackFlow logo" />
+      <div class="tag">Smart Stock, Sales & Shop Ledger for Snack Distribution</div>
+      <h1>SnackFlow User Handover Manual</h1>
+      <p>Stock, Sales, Shop Ledger & Distribution Management System</p>
+      <p>Version 1.0 · 14 June 2026 · Prepared for Snack Distribution Business Owner / Admin</p>
+    </section>
+    <main class="wrap">
+      <div class="grid">
+        <div class="metric">📦 Warehouse-wise stock</div>
+        <div class="metric">🧾 Sales and billing</div>
+        <div class="metric">🏪 Shop ledger</div>
+        <div class="metric">📍 GPS route locations</div>
+      </div>
+
+      <h2>1. What SnackFlow Does</h2>
+      <div class="card">SnackFlow tracks stock, handles two warehouses, manages shop sales through order bookers, records payments, tracks expenses, calculates profit, keeps GPS shop locations, and provides date-wise searchable reports.</div>
+
+      <h2>2. User Roles</h2>
+      <table><tr><th>Role</th><th>Can Do</th></tr>
+        <tr><td>Admin / Owner</td><td>Manage users, warehouses, SKUs, stock, shops, rates, sales, reversals, returns, expenses, reports, exports, and audit logs.</td></tr>
+        <tr><td>Warehouse Manager</td><td>Receive stock, view warehouse inventory, check ledger, view low stock, and adjust stock if allowed.</td></tr>
+        <tr><td>Order Booker</td><td>Use mobile workflow, see assigned shops, book sales, collect payments, record closed shops/no order, and capture GPS.</td></tr>
+        <tr><td>Accountant / Viewer</td><td>View sales, payments, shop ledgers, expenses, and profit reports.</td></tr>
+      </table>
+
+      <h2>3. First Time Admin Setup</h2>
+      <ol><li>Login as admin and change password.</li><li>Verify Warehouse 1 and Warehouse 2.</li><li>Create users and assign order bookers.</li><li>Create products/SKUs and rates.</li><li>Create shops, assign routes, and capture GPS.</li><li>Enter opening stock and opening balances.</li></ol>
+
+      <h2>4. Product and SKU Management</h2>
+      <p>Each product-size-flavour-pack combination is a separate SKU. Example: Chips Rs 50 BBQ, 24 packets per carton.</p>
+      <div class="callout">SnackFlow stores stock internally in packets, while screens can show cartons plus loose packets.</div>
+
+      <h2>5. Warehouse and Inventory Management</h2>
+      <p>Warehouse 1 and Warehouse 2 remain separate. Stock receiving converts cartons or bundles into packets and creates STOCK_IN ledger entries.</p>
+      <div class="warn">Never delete stock history. Use reversals, returns, or adjustment entries.</div>
+
+      <h2>6. Shop Management and GPS</h2>
+      <p>Go to Shops to add/edit shops. Record owner, phone, address, route, assigned warehouse, assigned order booker, credit limit, opening balance, and GPS coordinates. Use Open Map to verify Google Maps location.</p>
+
+      <h2>7. Mobile Order Booker Workflow</h2>
+      <ol><li>Open /mobile and login.</li><li>Select assigned shop.</li><li>Check pending balance.</li><li>Add SKU, quantity, and rate.</li><li>Review total bill and payment received.</li><li>Save delivered order.</li><li>Use payment-only or visit logging when needed.</li></ol>
+
+      <h2>8. Sales, Billing, Reversal, and Returns</h2>
+      <p>Stock reduces only when a sale is delivered/confirmed. Booked orders do not reduce stock. Reversal corrects a full delivered sale. Partial return corrects selected returned items.</p>
+      <div class="callout">Previous Pending + Today Bill - Payment - Reversal/Return = New Pending</div>
+
+      <h2>9. Payments, Expenses, and Profit</h2>
+      <p>Payments reduce shop balance. Expenses are recorded date-wise. Gross Profit = Sales - COGS. Net Profit = Gross Profit - Expenses. Cash received is not the same as profit.</p>
+
+      <h2>10. Reports</h2>
+      <table><tr><th>Report</th><th>Decision Supported</th></tr>
+        <tr><td>Daily Sales</td><td>Daily sales, cash, pending, profit.</td></tr>
+        <tr><td>Item Sold</td><td>Which SKUs are moving.</td></tr>
+        <tr><td>Shop Balances</td><td>Which shops need recovery.</td></tr>
+        <tr><td>Inventory</td><td>Warehouse-wise stock and low stock.</td></tr>
+        <tr><td>Profit</td><td>Gross profit, expenses, net profit.</td></tr>
+        <tr><td>Payment Recovery</td><td>Cash collected by date/shop.</td></tr>
+        <tr><td>Shop Visits</td><td>Closed shops/no-order activity.</td></tr>
+      </table>
+
+      <h2>11. Daily Routine</h2>
+      <div class="grid"><div class="card"><b>Morning</b><br/>Check stock, low stock, routes, pending balances.</div><div class="card"><b>During Day</b><br/>Book sales, collect payments, record visits.</div><div class="card"><b>Evening</b><br/>Review sales, cash, credit, expenses, profit, stock.</div></div>
+
+      <h2>12. Common Problems and Solutions</h2>
+      <table><tr><th>Problem</th><th>Solution</th></tr>
+        <tr><td>Wrong item entered</td><td>Cancel if not confirmed; reverse if confirmed.</td></tr>
+        <tr><td>Shop closed</td><td>Mark shop closed/no order.</td></tr>
+        <tr><td>Stock not available</td><td>Receive stock or transfer if feature is added.</td></tr>
+        <tr><td>Pending balance seems wrong</td><td>Open shop ledger and review sale/payment/reversal entries.</td></tr>
+      </table>
+
+      <h2>13. Security and Best Practices</h2>
+      <ul><li>Every user should have their own login.</li><li>Do not share admin password.</li><li>Change default password.</li><li>Reverse instead of deleting.</li><li>Backup database.</li><li>Review audit logs.</li></ul>
+
+      <h2>14. Glossary</h2>
+      <p><b>SKU:</b> Product + size + flavour + pack. <b>COGS:</b> Cost of goods sold. <b>Reversal:</b> Full correction. <b>Partial return:</b> Return selected sale items. <b>Order booker:</b> Field salesman.</p>
+
+      <h2>15. Handover Checklist</h2>
+      <p>☐ Admin login tested ☐ Warehouses created ☐ Users assigned ☐ Stock entered ☐ Shops/GPS captured ☐ Test sale/payment/reversal/return completed ☐ Expense entered ☐ Reports checked ☐ Manual handed over</p>
+    </main>
+    <footer>SnackFlow Distribution Management System</footer>
+  </body>
+</html>

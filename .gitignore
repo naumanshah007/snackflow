@@ -1,0 +1,15 @@
+.DS_Store
+.vercel/
+.env
+*.db
+*.log
+*.err
+__pycache__/
+.pytest_cache/
+.venv/
+node_modules/
+.next/
+dist/
+coverage/
+frontend/.env.local
+backend/.env

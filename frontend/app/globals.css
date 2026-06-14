@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  background: #f6f8fb;
+  color: #0f172a;
+}
+
+body {
+  margin: 0;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2;
+}
+
+@layer components {
+  .app-bg {
+    background:
+      linear-gradient(135deg, rgba(248, 250, 252, 0.96) 0%, rgba(239, 246, 255, 0.72) 42%, rgba(240, 253, 244, 0.68) 100%),
+      #f8fafc;
+  }
+
+  .premium-panel {
+    @apply rounded-lg border border-white/80 bg-white/90 shadow-premium backdrop-blur;
+  }
+
+  .quiet-panel {
+    @apply rounded-lg border border-slate-200/80 bg-white shadow-panel;
+  }
+
+  .surface-band {
+    @apply rounded-lg border border-slate-200/80 bg-white/70 shadow-lift backdrop-blur;
+  }
+
+  .field {
+    @apply focus-ring w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition placeholder:text-slate-400 hover:border-slate-300;
+  }
+
+  .field-lg {
+    @apply focus-ring w-full rounded-md border border-slate-200 bg-white px-3 py-3 text-base text-slate-900 shadow-sm transition placeholder:text-slate-400 hover:border-slate-300;
+  }
+
+  .btn-primary {
+    @apply focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lift transition hover:bg-orange-700 active:translate-y-px;
+  }
+
+  .btn-dark {
+    @apply focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white shadow-lift transition hover:bg-slate-800 active:translate-y-px;
+  }
+
+  .btn-soft {
+    @apply focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 active:translate-y-px;
+  }
+
+  .eyebrow {
+    @apply text-xs font-semibold uppercase text-slate-500;
+  }
+
+  .metric-label {
+    @apply text-xs font-semibold uppercase text-slate-500;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+  }
+}

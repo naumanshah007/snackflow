@@ -1,0 +1,16 @@
+{
+  "name": "SnackFlow",
+  "short_name": "SnackFlow",
+  "description": "Smart Stock, Sales & Shop Ledger for Snack Distribution",
+  "start_url": "/mobile",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#F97316",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "2172x724",
+      "type": "image/png"
+    }
+  ]
+}
