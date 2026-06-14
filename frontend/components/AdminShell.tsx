@@ -60,7 +60,7 @@ export function AdminShell({ title, children }: { title: string; children: React
             </div>
             <div>
               <div className="flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
-                SnackFlow <ChevronRight size={14} /> {pathname.split("/").filter(Boolean)[0] || "home"}
+                Zaib Brothers <ChevronRight size={14} /> {pathname.split("/").filter(Boolean)[0] || "home"}
               </div>
               <div className="mt-1 text-xl font-bold text-slate-950">{title}</div>
             </div>

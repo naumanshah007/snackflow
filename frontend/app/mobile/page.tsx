@@ -197,7 +197,7 @@ export default function MobilePage() {
     return (
       <main className="app-bg flex min-h-screen items-center px-4 py-8">
         <form onSubmit={doLogin} className="mx-auto w-full max-w-sm rounded-lg border border-white/80 bg-white/95 p-5 shadow-premium backdrop-blur">
-          <Image src="/logo.png" alt="SnackFlow" width={360} height={120} className="mb-6 h-auto w-52 object-contain" priority />
+          <Image src="/logo.png" alt="Zaib Brothers" width={360} height={120} className="mb-6 h-auto w-52 object-contain" priority />
           <div className="mb-5 rounded-lg bg-slate-950 p-4 text-white">
             <div className="text-xs font-semibold uppercase text-orange-200">Mobile route mode</div>
             <div className="mt-2 text-2xl font-bold">Fast orders, payments, and GPS visits.</div>
@@ -221,7 +221,7 @@ export default function MobilePage() {
     <main className="app-bg min-h-screen pb-28">
       <header className="sticky top-0 z-20 border-b border-white/80 bg-white/90 px-4 py-3 shadow-lift backdrop-blur-xl">
         <div className="flex items-center justify-between">
-          <Image src="/logo.png" alt="SnackFlow" width={300} height={100} className="h-auto w-44 object-contain" priority />
+          <Image src="/logo.png" alt="Zaib Brothers" width={300} height={100} className="h-auto w-44 object-contain" priority />
           <button onClick={logout} className="rounded-md bg-slate-950 p-2.5 text-white shadow-lift" aria-label="Logout">
             <LogOut size={18} />
           </button>

@@ -45,11 +45,11 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-[linear-gradient(135deg,#0f172a_0%,#1f2937_48%,#14532d_100%)]" />
         <div className="relative flex h-full flex-col justify-between p-12 text-white">
           <div className="w-72 rounded-lg bg-white p-4 shadow-premium">
-            <Image src="/logo.png" alt="SnackFlow" width={420} height={140} className="h-auto w-full object-contain" priority />
+            <Image src="/logo.png" alt="Zaib Brothers" width={420} height={140} className="h-auto w-full object-contain" priority />
           </div>
           <div className="max-w-2xl">
             <div className="eyebrow text-orange-200">Premium distribution workspace</div>
-            <h1 className="mt-3 text-6xl font-bold leading-tight">SnackFlow</h1>
+            <h1 className="mt-3 text-6xl font-bold leading-tight">Zaib Brothers</h1>
             <p className="mt-5 max-w-xl text-lg leading-8 text-slate-200">Smart stock, route sales, shop ledgers, cash recovery, and profit clarity for growing snack distribution teams.</p>
           </div>
           <div className="grid grid-cols-3 gap-3 text-sm text-slate-200">
@@ -64,7 +64,7 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit(submit)} className="w-full max-w-md rounded-lg border border-white/80 bg-white/95 p-6 shadow-premium backdrop-blur">
           <div className="mb-6">
             <div className="w-52">
-              <Image src="/logo.png" alt="SnackFlow" width={420} height={140} className="h-auto w-full object-contain" priority />
+              <Image src="/logo.png" alt="Zaib Brothers" width={420} height={140} className="h-auto w-full object-contain" priority />
             </div>
             <div className="mt-6 inline-flex rounded-full border border-orange-100 bg-orange-50 px-3 py-1 text-xs font-semibold uppercase text-orange-700">Secure access</div>
             <h2 className="mt-3 text-3xl font-bold text-slate-950">Sign in</h2>
