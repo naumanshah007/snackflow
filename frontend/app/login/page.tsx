@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { AnimatedDistributionHero } from "@/components/AnimatedDistributionHero";
+import { AnimatedLogoHero } from "@/components/AnimatedLogoHero";
 import { login } from "@/lib/api";
 
 const schema = z.object({
@@ -66,11 +66,9 @@ export default function LoginPage() {
             <p className="mt-3 max-w-md text-base leading-7 text-slate-300">Carton-first stock, route sales, shop ledgers, cash recovery, and profit clarity.</p>
           </div>
 
-          {/* live, mouse-interactive distribution visual */}
-          <div className="mt-2 flex flex-1 items-center">
-            <div className="glass-dark mx-auto w-full max-w-xl p-4">
-              <AnimatedDistributionHero interactive />
-            </div>
+          {/* live, mouse-interactive logo-centric visual */}
+          <div className="mt-2 flex flex-1 items-center justify-center">
+            <AnimatedLogoHero interactive />
           </div>
 
           <div className="mt-6 flex flex-wrap gap-2 text-xs text-slate-200">
