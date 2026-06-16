@@ -1,10 +1,12 @@
-# SnackFlow User Handover Manual
+# SnackFlow — Distribution Management System for Zaib Brothers
 
 Stock, Sales, Shop Ledger & Distribution Management System
 
-Version: 1.0  
-Date: 14 June 2026  
-Prepared for: Snack Distribution Business Owner / Admin
+Version: 1.1  
+Date: 16 June 2026  
+Prepared for: Zaib Brothers — Business Owner / Admin
+
+SnackFlow is the system name; Zaib Brothers is the business name.
 
 ## Table of Contents
 
@@ -29,6 +31,9 @@ Prepared for: Snack Distribution Business Owner / Admin
 19. Security and Best Practices
 20. Glossary
 21. Handover Checklist
+22. Carton-First Working
+23. App vs Link, and Costs
+24. 2026-06-15 Feedback Update
 
 ## 1. Cover Page
 
@@ -336,3 +341,24 @@ Evening:
 - [ ] Expense entered
 - [ ] Reports checked
 - [ ] Manual handed over
+
+## 22. Carton-First Working
+
+The business sells in cartons. SnackFlow now shows and accepts cartons everywhere, while still storing exact packet counts internally for accuracy.
+
+- A SKU has a **pack quantity** = packets per carton (for example 24).
+- Stock shows as **"12 cartons + 5 packets"**, with the total packets as secondary detail.
+- Cost and sale price are shown **per carton** (carton price = packet price × pack quantity), with the per-packet value beside it.
+- Stock receiving is entered in **cartons** (plus any loose packets) with a received date; after saving, the new carton balance is confirmed on screen.
+- Sales and the order-booker app take **cartons + loose packets** and a **rate per carton**, and show available stock in cartons.
+- CSV exports (Inventory, Sales, Stock Ledger, Payments, Expenses, Item-sales) include carton columns and open correctly in Excel.
+
+## 23. App vs Link, and Costs
+
+**How it runs.** SnackFlow runs as a web app through a secure link. Order bookers open it in a mobile browser. It can also be installed as a PWA / mobile-app-style shortcut on the phone's home screen. A separate Android / Play Store app can be built later if required — it is optional future work.
+
+**Costs.** Online usage may need hosting, database, storage, and domain, whose cost depends on the deployment choice (for example a cloud server with managed database and a domain name). Local-only use can avoid hosting cost but limits remote access for field order bookers.
+
+## 24. 2026-06-15 Feedback Update
+
+This version applies the Zaib Brothers UAT feedback: carton-first inventory, stock, sales, mobile, SKU prices and reports; carton cost and carton sale price; stock receiving with date and new-balance confirmation; a working Distribution Control page; an Expenses tab; clear Reversal and Partial Return screens (open a sale and tap **View**); order bookers can add new shops (pending admin approval) and collect payments with the shop balance, today's bill, total payable, remaining balance, and last payment date shown. The full feedback log is in `CLIENT_FEEDBACK_2026_06_15.md`.

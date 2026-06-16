@@ -433,8 +433,19 @@ def update_shop(
     shop = session.get(Shop, shop_id)
     if not shop:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shop not found")
+    data = payload.model_dump(exclude_unset=True)
+    if current_user.role == UserRole.ORDER_BOOKER:
+        # Order bookers may edit their own shop details but cannot self-approve
+        # or reassign the shop to another warehouse/booker.
+        if shop.assigned_order_booker_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Shop is outside your route")
+        for protected in ("status", "assigned_warehouse_id", "assigned_order_booker_id"):
+            data.pop(protected, None)
     old = model_snapshot(shop)
-    _apply_updates(shop, payload)
+    for key, value in data.items():
+        if hasattr(shop, key):
+            setattr(shop, key, value)
+    shop.updated_at = utc_now()
     write_audit(session, current_user, "UPDATE", "shop", shop.id, old, model_snapshot(shop))
     session.commit()
     session.refresh(shop)

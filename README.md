@@ -145,8 +145,19 @@ python3 scripts/generate_manual_pdf.py
 - Expenses reduce net profit but do not affect gross profit.
 - Reports show sales, item movement, pending bills, stock, payments, visits, expenses, and profit.
 
+## Order Booker New Shops
+
+Order bookers can register new shops from the mobile app. Such shops are scoped automatically to the booker's assigned warehouse and the booker, and are created with status `PENDING_APPROVAL`. An admin/accountant approves (or rejects) via `POST /shops/{id}/approval`; approved shops become active. Admin-created shops are active immediately. The migration `0003_shop_status` adds the `status` column (defaults `ACTIVE`, so nothing existing is hidden).
+
+## App vs Link, and Costs
+
+SnackFlow can run as a **web app through a secure link**. Order bookers can use it from a **mobile browser**, and it can be installed as a **PWA / mobile-app-style shortcut** (a `manifest.json` is included). A separate **Android / Play Store app** can be built later if required — it is optional future work.
+
+Online usage may require **hosting / database / storage / domain** cost depending on the deployment choice (for example a cloud server + managed Postgres + domain). **Local-only** use can avoid hosting cost but limits remote access for field order bookers.
+
 ## Notes
 
 - Confirmed sales should be reversed instead of edited or deleted.
 - Expense deletion is implemented as a void flag to preserve history.
 - Partial returns are implemented through `POST /sales/{sale_id}/return`.
+- Reversal and partial-return UI live on the Sales screen (open a sale → View).

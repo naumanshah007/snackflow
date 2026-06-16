@@ -15,7 +15,10 @@ SnackFlow manages snack distribution stock, sales, shop ledgers, payments, expen
 ## Folder Structure
 
 - `backend/app/models.py`: database models and enums
+- `backend/app/carton.py`: carton/packet conversion helpers (split, label, to_packets)
 - `backend/app/schemas.py`: API request/response schemas
+- `frontend/lib/cartons.ts`: carton/packet conversion helpers for the UI
+- `frontend/lib/csv.ts`: carton-friendly CSV export with explicit columns + Excel BOM
 - `backend/app/routers/`: REST endpoints
 - `backend/app/services/`: business logic for stock, sales, ledgers, payments
 - `backend/alembic/versions/`: migrations
@@ -76,3 +79,16 @@ python3 scripts/generate_manual_pdf.py
 - Payments reduce shop pending balance.
 - Order bookers are scoped to assigned warehouse and assigned shops/routes.
 - Warehouse 1 and Warehouse 2 stock must never mix.
+
+## Carton-First Rule
+
+- The business sells in cartons; stock is stored in packets.
+- Convert with the SKU `pack_quantity`: `cartons = floor(packets / pack_quantity)`, `loose = packets % pack_quantity`.
+- Carton cost/sale rate = per-packet value × `pack_quantity`. When saving, convert carton rates back to per-packet before storing.
+- Every screen and CSV that shows quantities or prices must be carton-first; keep packets as secondary detail.
+
+## Shop Approval
+
+- `Shop.status` is `ACTIVE` / `PENDING_APPROVAL` / `REJECTED` (default `ACTIVE`).
+- Order-booker-created shops are forced to the booker's warehouse + self and set `PENDING_APPROVAL`.
+- Admin/accountant approve or reject via `POST /shops/{id}/approval`.
