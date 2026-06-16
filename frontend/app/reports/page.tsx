@@ -1,14 +1,34 @@
 "use client";
 
-import { Download, Printer, RefreshCcw } from "lucide-react";
+import { BarChart3, Boxes, CalendarRange, Download, PackageCheck, Printer, RefreshCcw, Store } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/AdminShell";
 import { DataTable } from "@/components/DataTable";
+import { EmptyState } from "@/components/EmptyState";
 import { StatCard } from "@/components/StatCard";
 import { apiFetch, money } from "@/lib/api";
-import { exportCsv } from "@/lib/csv";
+import { exportCsv, type CsvColumn } from "@/lib/csv";
 import type { AnyRow } from "@/lib/types";
+
+function ReportCardHeader({ icon: Icon, title, onExport }: { icon: LucideIcon; title: string; onExport?: () => void }) {
+  return (
+    <div className="mb-3 flex items-center justify-between">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-orange-100 to-emerald-100 text-orange-700">
+          <Icon size={18} />
+        </span>
+        <h2 className="font-semibold text-slate-950">{title}</h2>
+      </div>
+      {onExport && (
+        <button onClick={onExport} className="btn-soft no-print px-3 py-2" title="Export CSV">
+          <Download size={15} /> CSV
+        </button>
+      )}
+    </div>
+  );
+}
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -89,15 +109,11 @@ export default function ReportsPage() {
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-2">
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-semibold text-slate-950">Daily Sales Report</h2>
-            <button onClick={() => exportCsv("daily-sales.csv", dailySales)} className="no-print rounded-md border border-slate-200 bg-white p-2 text-slate-600 shadow-sm" title="CSV">
-              <Download size={16} />
-            </button>
-          </div>
+        <section className="premium-panel p-4">
+          <ReportCardHeader icon={CalendarRange} title="Daily Sales Report" onExport={() => exportCsv("daily-sales.csv", dailySales)} />
           <DataTable
             rows={dailySales}
+            empty={<EmptyState icon={CalendarRange} title="No sales found for this date range" hint="Adjust the date filter or confirm deliveries." />}
             columns={[
               { key: "date", label: "Date" },
               { key: "status", label: "Status" },
@@ -109,28 +125,24 @@ export default function ReportsPage() {
           />
         </section>
 
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-semibold text-slate-950">Item Sold Report</h2>
-            <button
-              onClick={() =>
-                exportCsv("item-sales.csv", itemSales, [
-                  { key: "sku_name", header: "SKU" },
-                  { key: "cartons", header: "Cartons" },
-                  { key: "loose_packets", header: "Loose Packets" },
-                  { key: "packets", header: "Total Packets" },
-                  { key: "amount", header: "Amount" },
-                  { key: "profit", header: "Profit" }
-                ])
-              }
-              className="no-print rounded-md border border-slate-200 bg-white p-2 text-slate-600 shadow-sm"
-              title="CSV"
-            >
-              <Download size={16} />
-            </button>
-          </div>
+        <section className="premium-panel p-4">
+          <ReportCardHeader
+            icon={Boxes}
+            title="Item Sold Report"
+            onExport={() =>
+              exportCsv("item-sales.csv", itemSales, [
+                { key: "sku_name", header: "SKU" },
+                { key: "cartons", header: "Cartons" },
+                { key: "loose_packets", header: "Loose Packets" },
+                { key: "packets", header: "Total Packets" },
+                { key: "amount", header: "Amount" },
+                { key: "profit", header: "Profit" }
+              ] satisfies CsvColumn[])
+            }
+          />
           <DataTable
             rows={itemSales}
+            empty={<EmptyState icon={Boxes} title="No items sold in this range" hint="Carton sales will be summarised here." />}
             columns={[
               { key: "sku_name", label: "SKU" },
               { key: "carton_label", label: "Sold (cartons)" },
@@ -143,15 +155,11 @@ export default function ReportsPage() {
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-2">
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-semibold text-slate-950">Shop Pending Bills</h2>
-            <button onClick={() => exportCsv("shop-balances.csv", balances)} className="no-print rounded-md border border-slate-200 bg-white p-2 text-slate-600 shadow-sm" title="CSV">
-              <Download size={16} />
-            </button>
-          </div>
+        <section className="premium-panel p-4">
+          <ReportCardHeader icon={Store} title="Shop Pending Bills" onExport={() => exportCsv("shop-balances.csv", balances)} />
           <DataTable
             rows={balances}
+            empty={<EmptyState icon={Store} title="No pending balances" hint="Every assigned shop is settled up." />}
             columns={[
               { key: "shop_name", label: "Shop" },
               { key: "area_route", label: "Route" },
@@ -160,15 +168,11 @@ export default function ReportsPage() {
           />
         </section>
 
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-semibold text-slate-950">Low Stock Report</h2>
-            <button onClick={() => exportCsv("low-stock.csv", lowStock)} className="no-print rounded-md border border-slate-200 bg-white p-2 text-slate-600 shadow-sm" title="CSV">
-              <Download size={16} />
-            </button>
-          </div>
+        <section className="premium-panel p-4">
+          <ReportCardHeader icon={BarChart3} title="Low Stock Report" onExport={() => exportCsv("low-stock.csv", lowStock)} />
           <DataTable
             rows={lowStock}
+            empty={<EmptyState icon={PackageCheck} title="Stock looks healthy" hint="No SKUs below their low-stock threshold." />}
             columns={[
               { key: "warehouse_name", label: "Warehouse" },
               { key: "sku_name", label: "SKU" },

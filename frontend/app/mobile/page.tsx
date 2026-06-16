@@ -265,28 +265,37 @@ export default function MobilePage() {
           </button>
         </div>
         {selectedShop && tab !== "newshop" && (
-          <div className="mt-3 rounded-lg bg-slate-950 p-4 text-white shadow-lift">
-            <div className="flex items-start justify-between gap-3">
+          <div className="relative mt-3 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 to-slate-800 p-4 text-white shadow-lift">
+            <div className="blob -right-6 -top-8 h-28 w-28 bg-orange-500/30" />
+            <div className="relative flex items-start justify-between gap-3">
               <div>
-                <div className="text-xs font-semibold uppercase text-orange-200">Selected shop</div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-orange-200">Selected shop</div>
                 <div className="mt-1 text-lg font-bold leading-tight">{selectedShop.name}</div>
               </div>
               <div className="text-right">
-                <div className="text-xs text-slate-300">Pending</div>
-                <div className="font-bold text-green-200">{money(selectedShop.current_balance)}</div>
+                <div className="flex items-center justify-end gap-1.5 text-xs text-slate-300">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="pulse-ring absolute inline-flex h-full w-full rounded-full bg-amber-300" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-400" />
+                  </span>
+                  Pending
+                </div>
+                <div className="text-lg font-bold text-amber-200">{money(selectedShop.current_balance)}</div>
               </div>
             </div>
-            <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-300">
+            <div className="relative mt-3 flex items-center justify-between gap-2 text-xs text-slate-300">
               <span className="truncate">{selectedShop.area_route || selectedShop.phone || "No route assigned"}</span>
-              {selectedShop.status === "PENDING_APPROVAL" && <span className="rounded bg-orange-500/20 px-2 py-1 text-orange-100">Pending approval</span>}
-              {selectedShop.gps_latitude && selectedShop.gps_longitude ? <span className="rounded bg-green-500/15 px-2 py-1 text-green-100">GPS saved</span> : <span className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">GPS needed</span>}
+              <span className="flex items-center gap-2">
+                {selectedShop.status === "PENDING_APPROVAL" && <span className="rounded-full bg-orange-500/20 px-2 py-1 text-orange-100">Pending approval</span>}
+                {selectedShop.gps_latitude && selectedShop.gps_longitude ? <span className="rounded-full bg-green-500/15 px-2 py-1 text-green-100">GPS saved</span> : <span className="rounded-full bg-orange-500/15 px-2 py-1 text-orange-100">GPS needed</span>}
+              </span>
             </div>
           </div>
         )}
         {message && <div className="mt-3 rounded-md border border-orange-100 bg-orange-50 px-3 py-2 text-sm text-orange-800">{message}</div>}
       </header>
 
-      <section className="mx-auto max-w-3xl px-4 py-4">
+      <section key={tab} className="mx-auto max-w-3xl px-4 py-4" style={{ animation: "rise-in 0.28s ease both" }}>
         {tab === "shops" && (
           <div className="space-y-3">
             <button onClick={() => setTab("newshop")} className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-3 text-sm font-semibold text-white shadow-lift">
@@ -297,32 +306,44 @@ export default function MobilePage() {
               <input className="w-full bg-transparent text-base outline-none placeholder:text-slate-400" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search shops" />
             </label>
             {filteredShops.map((shop) => (
-              <div key={shop.id} className={`w-full rounded-lg border p-4 shadow-premium transition ${String(shop.id) === selectedShopId ? "border-orange-300 bg-orange-50/95" : "border-white/80 bg-white/95"}`}>
+              <div key={shop.id} className={`w-full rounded-2xl border p-4 shadow-premium transition ${String(shop.id) === selectedShopId ? "border-orange-300 bg-orange-50/95" : "border-white/80 bg-white/95"}`}>
                 <button onClick={() => setSelectedShopId(String(shop.id))} className="w-full text-left">
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <div className="font-semibold text-slate-950">{shop.name}</div>
-                        {shop.status === "PENDING_APPROVAL" && <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700">Pending</span>}
+                        <div className="truncate font-semibold text-slate-950">{shop.name}</div>
+                        {shop.status === "PENDING_APPROVAL" && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700">Pending</span>}
+                        {shop.gps_latitude && shop.gps_longitude && <MapPin size={13} className="text-emerald-600" />}
                       </div>
-                      <div className="mt-1 text-sm text-slate-500">{shop.owner_name || shop.phone || shop.area_route}</div>
+                      <div className="mt-1 truncate text-sm text-slate-500">{shop.owner_name || shop.phone || shop.area_route}</div>
                     </div>
-                    <div className="rounded-md bg-slate-950 px-3 py-2 text-right text-sm font-semibold text-white">{money(shop.current_balance)}</div>
+                    <div className="shrink-0 rounded-xl bg-slate-950 px-3 py-2 text-right">
+                      <div className="flex items-center justify-end gap-1 text-[10px] text-slate-400">
+                        {Number(shop.current_balance) > 0 && (
+                          <span className="relative flex h-1.5 w-1.5">
+                            <span className="pulse-ring absolute inline-flex h-full w-full rounded-full bg-amber-300" />
+                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-400" />
+                          </span>
+                        )}
+                        Pending
+                      </div>
+                      <div className="text-sm font-bold text-amber-200">{money(shop.current_balance)}</div>
+                    </div>
                   </div>
                 </button>
                 <div className="mt-4 grid grid-cols-3 gap-2">
-                  <button type="button" onClick={() => { setSelectedShopId(String(shop.id)); setTab("order"); }} className="rounded-md bg-orange-600 px-3 py-3 text-sm font-semibold text-white shadow-lift">
+                  <button type="button" onClick={() => { setSelectedShopId(String(shop.id)); setTab("order"); }} className="rounded-xl bg-orange-600 px-3 py-3 text-sm font-semibold text-white shadow-lift transition active:scale-95">
                     Order
                   </button>
-                  <button type="button" onClick={() => { setSelectedShopId(String(shop.id)); setTab("payment"); }} className="rounded-md bg-green-600 px-3 py-3 text-sm font-semibold text-white shadow-lift">
+                  <button type="button" onClick={() => { setSelectedShopId(String(shop.id)); setTab("payment"); }} className="rounded-xl bg-green-600 px-3 py-3 text-sm font-semibold text-white shadow-lift transition active:scale-95">
                     Collect
                   </button>
                   {shop.gps_latitude && shop.gps_longitude ? (
-                    <a href={`https://www.google.com/maps?q=${shop.gps_latitude},${shop.gps_longitude}`} target="_blank" className="rounded-md border border-slate-200 bg-white px-3 py-3 text-center text-sm font-semibold text-slate-700 shadow-sm">
+                    <a href={`https://www.google.com/maps?q=${shop.gps_latitude},${shop.gps_longitude}`} target="_blank" className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-sm font-semibold text-slate-700 shadow-sm">
                       Map
                     </a>
                   ) : (
-                    <button type="button" onClick={() => { setSelectedShopId(String(shop.id)); captureGps(); }} className="rounded-md border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-700 shadow-sm">
+                    <button type="button" onClick={() => { setSelectedShopId(String(shop.id)); captureGps(); }} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-700 shadow-sm transition active:scale-95">
                       GPS
                     </button>
                   )}
@@ -462,7 +483,7 @@ export default function MobilePage() {
         )}
       </section>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-3xl grid-cols-4 border-t border-white/80 bg-white/95 p-2 shadow-premium backdrop-blur">
+      <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-3xl grid-cols-4 gap-1 border-t border-white/80 bg-white/90 p-2 shadow-premium backdrop-blur-xl">
         {([
           ["shops", Store, "Shops"],
           ["order", ShoppingCart, "Order"],
@@ -471,7 +492,7 @@ export default function MobilePage() {
         ] as const).map(([value, Icon, label]) => {
           const TypedIcon = Icon as typeof Store;
           return (
-            <button key={String(value)} onClick={() => setTab(value as Tab)} className={`flex flex-col items-center gap-1 rounded-md py-2 text-xs font-semibold transition ${tab === value ? "bg-slate-950 text-white shadow-lift" : "text-slate-500 hover:bg-slate-50"}`}>
+            <button key={String(value)} onClick={() => setTab(value as Tab)} className={`flex flex-col items-center gap-1 rounded-xl py-2 text-xs font-semibold transition-all duration-200 ${tab === value ? "scale-[1.03] bg-slate-950 text-white shadow-lift" : "text-slate-500 hover:bg-slate-100"}`}>
               <TypedIcon size={20} />
               {label as string}
             </button>

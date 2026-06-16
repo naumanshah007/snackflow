@@ -80,6 +80,145 @@ textarea {
   .metric-label {
     @apply text-xs font-semibold uppercase text-slate-500;
   }
+
+  /* Glassmorphism surface used across landing + premium cards */
+  .glass {
+    @apply rounded-2xl border border-white/60 bg-white/70 shadow-premium backdrop-blur-xl;
+  }
+
+  .glass-dark {
+    @apply rounded-2xl border border-white/10 bg-white/[0.07] shadow-premium backdrop-blur-xl;
+  }
+
+  .btn-ghost {
+    @apply focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20 active:translate-y-px;
+  }
+
+  /* Pill used for carton-first labels and live status chips */
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold;
+  }
+}
+
+/* ---------- Motion system (performant, GPU-friendly) ---------- */
+@keyframes blob-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33% { transform: translate3d(24px, -28px, 0) scale(1.08); }
+  66% { transform: translate3d(-20px, 18px, 0) scale(0.94); }
+}
+
+@keyframes float-soft {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes float-soft-lg {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-16px) rotate(-1.5deg); }
+}
+
+@keyframes dash-flow {
+  to { stroke-dashoffset: -240; }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.7); opacity: 0.7; }
+  70% { transform: scale(1.6); opacity: 0; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+
+/* decorative animated gradient blob */
+.blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(48px);
+  opacity: 0.5;
+  will-change: transform;
+  animation: blob-drift 18s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.anim-float { animation: float-soft 6s ease-in-out infinite; will-change: transform; }
+.anim-float-lg { animation: float-soft-lg 9s ease-in-out infinite; will-change: transform; }
+.anim-bob { animation: bob 3.2s ease-in-out infinite; }
+.anim-spin-slow { animation: spin-slow 22s linear infinite; }
+
+/* SVG route line flow */
+.route-dash {
+  stroke-dasharray: 10 14;
+  animation: dash-flow 3.2s linear infinite;
+}
+.route-dash-slow { animation-duration: 5s; }
+
+/* live pulse rings (place behind a dot) */
+.pulse-ring {
+  transform-origin: center;
+  animation: pulse-ring 2.6s ease-out infinite;
+}
+
+/* entrance reveal — starts hidden, plays once */
+.reveal {
+  opacity: 0;
+  animation: rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.reveal-2 { animation-delay: 0.08s; }
+.reveal-3 { animation-delay: 0.16s; }
+.reveal-4 { animation-delay: 0.24s; }
+.reveal-5 { animation-delay: 0.32s; }
+.reveal-6 { animation-delay: 0.40s; }
+
+/* loading skeleton shimmer */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #e9eef5;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+  animation: shimmer 1.6s infinite;
+}
+
+/* warning pulse for low-stock cards */
+.warn-pulse { animation: pulse-soft 2.4s ease-in-out infinite; }
+@keyframes pulse-soft {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.0); }
+  50% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.12); }
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .reveal { opacity: 1 !important; transform: none !important; }
+  .blob { opacity: 0.4; }
 }
 
 @media print {

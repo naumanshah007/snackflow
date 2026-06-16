@@ -1,10 +1,11 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Download, Plus, RefreshCcw, RotateCcw, Save, Trash2, Undo2, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Download, Plus, RefreshCcw, RotateCcw, Save, ShoppingCart, Trash2, Undo2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/AdminShell";
 import { DataTable } from "@/components/DataTable";
+import { EmptyState } from "@/components/EmptyState";
 import { apiFetch, money } from "@/lib/api";
 import { cartonLabel, perCarton, toPackets } from "@/lib/cartons";
 import { exportCsv } from "@/lib/csv";
@@ -341,6 +342,7 @@ export default function SalesPage() {
           </div>
           <DataTable
             rows={sales}
+            empty={<EmptyState icon={ShoppingCart} title="No sales yet" hint="Create a carton order on the left to get started." />}
             columns={[
               { key: "sale_date", label: "Date", render: (row) => new Date(row.sale_date).toLocaleString() },
               { key: "shop_name", label: "Shop" },
