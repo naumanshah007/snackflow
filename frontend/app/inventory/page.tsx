@@ -1,10 +1,11 @@
 "use client";
 
-import { Download, RefreshCcw } from "lucide-react";
+import { Boxes, Download, RefreshCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/AdminShell";
 import { DataTable } from "@/components/DataTable";
+import { EmptyState } from "@/components/EmptyState";
 import { apiFetch, money, packets } from "@/lib/api";
 import { cartonLabel } from "@/lib/cartons";
 import { exportCsv } from "@/lib/csv";
@@ -36,6 +37,11 @@ export default function InventoryPage() {
 
   return (
     <AdminShell title="Inventory">
+      <div className="mb-4 flex items-center gap-2">
+        <span className="chip border-orange-200 bg-orange-50 text-orange-700">
+          <Boxes size={14} /> Carton-first · available cartons + loose packets
+        </span>
+      </div>
       <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-white/80 bg-white/75 p-4 shadow-lift backdrop-blur">
         <label className="min-w-64 flex-1">
           <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Search SKU</span>
@@ -80,6 +86,7 @@ export default function InventoryPage() {
       </div>
       <DataTable
         rows={rows}
+        empty={<EmptyState icon={Boxes} title="No stock to show" hint="Receive cartons or clear the filters to see balances." />}
         columns={[
           { key: "warehouse_name", label: "Warehouse" },
           { key: "sku_name", label: "SKU" },

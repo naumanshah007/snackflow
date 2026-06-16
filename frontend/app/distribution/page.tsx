@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/AdminShell";
 import { DataTable } from "@/components/DataTable";
+import { EmptyState } from "@/components/EmptyState";
 import { StatCard } from "@/components/StatCard";
 import { apiFetch, money, packets } from "@/lib/api";
 import { cartonLabel } from "@/lib/cartons";
@@ -71,7 +72,7 @@ export default function DistributionControlPage() {
           <h2 className="mb-3 font-semibold text-slate-950">Stock by SKU (cartons)</h2>
           <DataTable
             rows={inventory}
-            empty="No stock yet"
+            empty={<EmptyState icon={Boxes} title="No stock yet" hint="Receive cartons to populate warehouse balances." />}
             columns={[
               { key: "warehouse_name", label: "Warehouse" },
               { key: "sku_name", label: "SKU" },
