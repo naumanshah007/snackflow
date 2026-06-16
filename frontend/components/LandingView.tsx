@@ -97,7 +97,7 @@ export function LandingView() {
         </div>
 
         <div className="reveal reveal-2 glass-dark p-4 sm:p-6">
-          <AnimatedDistributionHero />
+          <AnimatedDistributionHero interactive />
         </div>
       </section>
 

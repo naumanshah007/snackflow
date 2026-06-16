@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * AnimatedDistributionHero
@@ -39,17 +39,51 @@ const paymentRoutes = [
   { id: "p2", d: "M402,352 C 320,360 250,360 174,360", dur: "5.4s", delay: "2s" }
 ];
 
-export function AnimatedDistributionHero({ className = "" }: { className?: string }) {
+export function AnimatedDistributionHero({ className = "", interactive = false }: { className?: string; interactive?: boolean }) {
   const reduced = usePrefersReducedMotion();
+  const ref = useRef<HTMLDivElement>(null);
+
+  const handleMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!interactive || reduced) return;
+    const el = ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const mx = ((event.clientX - rect.left) / rect.width - 0.5) * 2; // -1 .. 1
+    const my = ((event.clientY - rect.top) / rect.height - 0.5) * 2;
+    el.style.setProperty("--mx", mx.toFixed(3));
+    el.style.setProperty("--my", my.toFixed(3));
+  };
+
+  const resetMove = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.setProperty("--mx", "0");
+    el.style.setProperty("--my", "0");
+  };
+
+  const layer = (factor: number) => ({
+    transform: `translate3d(calc(var(--mx,0) * ${factor}px), calc(var(--my,0) * ${factor}px), 0)`,
+    transition: "transform 0.35s cubic-bezier(0.22,1,0.36,1)",
+    willChange: "transform"
+  });
 
   return (
-    <div className={`relative ${className}`} aria-hidden="true">
-      {/* soft gradient glow blobs behind the diagram */}
-      <div className="blob -left-10 top-4 h-56 w-56 bg-orange-400/40" />
-      <div className="blob right-0 bottom-2 h-56 w-56 bg-emerald-400/40" style={{ animationDelay: "-6s" }} />
-      <div className="blob left-1/3 top-1/2 h-44 w-44 bg-sky-400/30" style={{ animationDelay: "-11s" }} />
+    <div
+      ref={ref}
+      className={`relative ${className}`}
+      aria-hidden="true"
+      onMouseMove={handleMove}
+      onMouseLeave={resetMove}
+      style={{ "--mx": 0, "--my": 0 } as React.CSSProperties}
+    >
+      {/* soft gradient glow blobs behind the diagram (deepest parallax layer) */}
+      <div className="absolute inset-0" style={layer(26)}>
+        <div className="blob -left-10 top-4 h-56 w-56 bg-orange-400/40" />
+        <div className="blob right-0 bottom-2 h-56 w-56 bg-emerald-400/40" style={{ animationDelay: "-6s" }} />
+        <div className="blob left-1/3 top-1/2 h-44 w-44 bg-sky-400/30" style={{ animationDelay: "-11s" }} />
+      </div>
 
-      <svg viewBox="0 0 560 440" className="relative w-full h-auto" role="img">
+      <svg viewBox="0 0 560 440" className="relative w-full h-auto" role="img" style={layer(-9)}>
         <defs>
           <linearGradient id="gWarehouse" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stopColor="#0f172a" />

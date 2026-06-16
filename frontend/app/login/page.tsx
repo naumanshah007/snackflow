@@ -1,13 +1,14 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Boxes, MapPin, RotateCcw, ShieldCheck } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { AnimatedDistributionHero } from "@/components/AnimatedDistributionHero";
 import { login } from "@/lib/api";
 
 const schema = z.object({
@@ -45,19 +46,38 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-[linear-gradient(135deg,#0f172a_0%,#1f2937_48%,#14532d_100%)]" />
         <div className="blob left-10 top-16 h-72 w-72 bg-orange-500/25" />
         <div className="blob bottom-10 right-10 h-72 w-72 bg-emerald-500/25" style={{ animationDelay: "-8s" }} />
-        <div className="relative flex h-full flex-col justify-between p-12 text-white">
-          <div className="w-72 rounded-lg bg-white p-4 shadow-premium">
-            <Image src="/logo.png" alt="Zaib Brothers" width={420} height={140} className="h-auto w-full object-contain" priority />
+        <div className="relative flex h-full flex-col p-10 text-white xl:p-12">
+          <div className="flex items-center justify-between gap-4">
+            <div className="w-52 rounded-xl bg-white p-3 shadow-premium">
+              <Image src="/logo.png" alt="Zaib Brothers" width={420} height={140} className="h-auto w-full object-contain" priority />
+            </div>
+            <span className="chip border-white/15 bg-white/10 text-emerald-200">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="pulse-ring absolute inline-flex h-full w-full rounded-full bg-emerald-400" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              </span>
+              Live distribution
+            </span>
           </div>
-          <div className="max-w-2xl">
+
+          <div className="mt-7">
             <div className="eyebrow text-orange-200">SnackFlow · Distribution Management System</div>
-            <h1 className="mt-3 text-6xl font-bold leading-tight">Zaib Brothers</h1>
-            <p className="mt-5 max-w-xl text-lg leading-8 text-slate-200">Carton-first stock, route sales, shop ledgers, cash recovery, and profit clarity for growing snack distribution teams.</p>
+            <h1 className="mt-2 text-4xl font-bold leading-tight xl:text-5xl">Zaib Brothers</h1>
+            <p className="mt-3 max-w-md text-base leading-7 text-slate-300">Carton-first stock, route sales, shop ledgers, cash recovery, and profit clarity.</p>
           </div>
-          <div className="grid grid-cols-3 gap-3 text-sm text-slate-200">
-            <div className="rounded-lg border border-white/15 bg-white/10 p-4 shadow-lift">Warehouse inventory</div>
-            <div className="rounded-lg border border-white/15 bg-white/10 p-4 shadow-lift">GPS shop routes</div>
-            <div className="rounded-lg border border-white/15 bg-white/10 p-4 shadow-lift">Ledger-safe reversals</div>
+
+          {/* live, mouse-interactive distribution visual */}
+          <div className="mt-2 flex flex-1 items-center">
+            <div className="glass-dark mx-auto w-full max-w-xl p-4">
+              <AnimatedDistributionHero interactive />
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-wrap gap-2 text-xs text-slate-200">
+            <span className="chip border-white/15 bg-white/10"><Boxes size={13} className="text-orange-300" /> Carton-first</span>
+            <span className="chip border-white/15 bg-white/10"><MapPin size={13} className="text-emerald-300" /> GPS shop routes</span>
+            <span className="chip border-white/15 bg-white/10"><RotateCcw size={13} className="text-sky-300" /> Ledger-safe reversals</span>
+            <span className="chip border-white/15 bg-white/10"><ShieldCheck size={13} className="text-amber-300" /> Two warehouses</span>
           </div>
         </div>
       </section>
