@@ -112,7 +112,20 @@ export default function ReportsPage() {
         <section>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold text-slate-950">Item Sold Report</h2>
-            <button onClick={() => exportCsv("item-sales.csv", itemSales)} className="no-print rounded-md border border-slate-200 bg-white p-2 text-slate-600 shadow-sm" title="CSV">
+            <button
+              onClick={() =>
+                exportCsv("item-sales.csv", itemSales, [
+                  { key: "sku_name", header: "SKU" },
+                  { key: "cartons", header: "Cartons" },
+                  { key: "loose_packets", header: "Loose Packets" },
+                  { key: "packets", header: "Total Packets" },
+                  { key: "amount", header: "Amount" },
+                  { key: "profit", header: "Profit" }
+                ])
+              }
+              className="no-print rounded-md border border-slate-200 bg-white p-2 text-slate-600 shadow-sm"
+              title="CSV"
+            >
               <Download size={16} />
             </button>
           </div>
@@ -120,6 +133,7 @@ export default function ReportsPage() {
             rows={itemSales}
             columns={[
               { key: "sku_name", label: "SKU" },
+              { key: "carton_label", label: "Sold (cartons)" },
               { key: "packets", label: "Packets" },
               { key: "amount", label: "Amount", render: (row) => money(row.amount) },
               { key: "profit", label: "Profit", render: (row) => money(row.profit) }

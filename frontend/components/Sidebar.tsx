@@ -9,6 +9,7 @@ import {
   CreditCard,
   FileBarChart,
   Home,
+  LayoutGrid,
   MapPin,
   Package,
   Receipt,
@@ -24,6 +25,7 @@ import { Logo } from "@/components/Logo";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
+  { href: "/distribution", label: "Distribution Control", icon: LayoutGrid },
   { href: "/products", label: "Products", icon: Package },
   { href: "/skus", label: "SKUs & Rates", icon: Tags },
   { href: "/rates", label: "Shop Rates", icon: Tags },
@@ -44,15 +46,22 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   return (
-    <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-72 border-r border-white/10 bg-slate-950 px-4 py-5 text-white shadow-premium lg:block">
+    <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-72 overflow-y-auto border-r border-white/10 bg-slate-950 px-4 py-5 text-white shadow-premium lg:block">
       <div className="rounded-lg border border-white/10 bg-white p-3 shadow-lift">
         <Logo />
       </div>
-      <div className="mt-5 rounded-lg border border-white/10 bg-white/[0.06] p-3">
+      <div className="mt-3 px-1 text-[11px] leading-snug text-slate-400">
+        SnackFlow — Distribution Management System for <span className="font-semibold text-slate-200">Zaib Brothers</span>
+      </div>
+      <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.06] p-3">
         <div className="text-xs font-semibold uppercase text-slate-400">Distribution control</div>
         <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-          <div className="rounded-md bg-orange-500/15 px-2 py-2 text-orange-100">Stock</div>
-          <div className="rounded-md bg-green-500/15 px-2 py-2 text-green-100">Ledger</div>
+          <Link href="/inventory" className="rounded-md bg-orange-500/15 px-2 py-2 text-center font-semibold text-orange-100 transition hover:bg-orange-500/25">
+            Stock
+          </Link>
+          <Link href="/stock/ledger" className="rounded-md bg-green-500/15 px-2 py-2 text-center font-semibold text-green-100 transition hover:bg-green-500/25">
+            Ledger
+          </Link>
         </div>
       </div>
       <nav className="mt-5 space-y-1">

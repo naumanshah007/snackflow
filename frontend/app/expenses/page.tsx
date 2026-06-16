@@ -30,10 +30,16 @@ export default function ExpensesPage() {
       ]}
       columns={[
         { key: "expense_date", label: "Date" },
-        { key: "category", label: "Category" },
+        { key: "category", label: "Category", render: (row) => String(row.category || "").replaceAll("_", " ") },
         { key: "amount", label: "Amount", render: (row) => money(row.amount) },
-        { key: "warehouse_id", label: "Warehouse" },
         { key: "description", label: "Description" }
+      ]}
+      exportFilename="expenses.csv"
+      exportColumns={[
+        { key: "expense_date", header: "Date" },
+        { key: "category", header: "Category", value: (row) => String(row.category || "").replaceAll("_", " ") },
+        { key: "amount", header: "Amount" },
+        { key: "description", header: "Notes" }
       ]}
     />
   );

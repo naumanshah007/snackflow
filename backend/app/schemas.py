@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models import ExpenseCategory, SaleStatus, UserRole, VisitStatus
+from app.models import ExpenseCategory, SaleStatus, ShopStatus, UserRole, VisitStatus
 
 
 class TokenRead(BaseModel):
@@ -140,7 +140,13 @@ class ShopUpdate(BaseModel):
     credit_limit: float | None = None
     opening_balance: float | None = None
     notes: str | None = None
+    status: ShopStatus | None = None
     is_active: bool | None = None
+
+
+class ShopApprovalRequest(BaseModel):
+    status: ShopStatus
+    notes: str | None = None
 
 
 class RateRuleCreate(BaseModel):
@@ -165,6 +171,8 @@ class StockReceiptItemCreate(BaseModel):
     sku_id: int
     quantity_received: int = Field(gt=0)
     quantity_unit: str = "carton"
+    # Optional loose packets received alongside whole cartons in the same line.
+    loose_packets: int = Field(default=0, ge=0)
     pack_quantity: int | None = Field(default=None, gt=0)
     cost_per_carton: float | None = Field(default=None, ge=0)
     cost_per_packet: float | None = Field(default=None, ge=0)
@@ -188,8 +196,15 @@ class StockAdjustmentCreate(BaseModel):
 
 class SaleItemCreate(BaseModel):
     sku_id: int
-    quantity_packets: int = Field(gt=0)
-    sale_rate: float = Field(ge=0)
+    # Either provide quantity_packets directly, or cartons + loose_packets and
+    # the server converts using the SKU pack_quantity.
+    quantity_packets: int | None = Field(default=None, ge=0)
+    cartons: int | None = Field(default=None, ge=0)
+    loose_packets: int | None = Field(default=None, ge=0)
+    # Either a per-packet sale_rate, or a per-carton rate that the server
+    # converts to a per-packet rate before storing.
+    sale_rate: float | None = Field(default=None, ge=0)
+    sale_rate_per_carton: float | None = Field(default=None, ge=0)
 
 
 class SaleCreate(BaseModel):

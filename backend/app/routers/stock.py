@@ -5,6 +5,7 @@ from sqlmodel import Session, or_, select
 
 from app.database import get_session
 from app.dependencies import assert_warehouse_scope, get_current_user, require_roles, scoped_warehouse_id
+from app.carton import carton_label, split_cartons
 from app.models import InventoryBalance, Product, SKU, StockLedger, StockReceipt, StockReceiptItem, User, UserRole, Warehouse
 from app.schemas import StockAdjustmentCreate, StockReceiptCreate
 from app.services.stock import adjust_stock, receive_stock
@@ -84,8 +85,9 @@ def get_inventory(
             continue
         if low_stock_only and balance.quantity_packets > sku.low_stock_threshold:
             continue
-        cartons = balance.quantity_packets // sku.pack_quantity
-        loose_packets = balance.quantity_packets % sku.pack_quantity
+        pack_quantity = sku.pack_quantity or 1
+        cartons = balance.quantity_packets // pack_quantity
+        loose_packets = balance.quantity_packets % pack_quantity
         rows.append(
             {
                 "warehouse_id": balance.warehouse_id,
@@ -95,10 +97,13 @@ def get_inventory(
                 "product_name": product.name if product else "",
                 "size_mrp": sku.size_mrp,
                 "flavour": sku.flavour,
+                "pack_quantity": pack_quantity,
                 "available_packets": balance.quantity_packets,
                 "cartons": cartons,
                 "loose_packets": loose_packets,
+                "carton_label": carton_label(balance.quantity_packets, pack_quantity),
                 "average_cost_per_packet": round(balance.average_cost_per_packet, 2),
+                "average_cost_per_carton": round(balance.average_cost_per_packet * pack_quantity, 2),
                 "stock_value": round(balance.quantity_packets * balance.average_cost_per_packet, 2),
                 "low_stock": balance.quantity_packets <= sku.low_stock_threshold,
                 "low_stock_threshold": sku.low_stock_threshold,
@@ -130,9 +135,16 @@ def get_stock_ledger(
         sku_name = f"{product.name if product else ''} Rs {sku.size_mrp:g} {sku.flavour or ''}".strip() if sku else ""
         if search and search.lower() not in sku_name.lower():
             continue
+        pack_quantity = sku.pack_quantity if sku else 1
+        cartons, loose_packets = split_cartons(row.quantity_packets, pack_quantity)
         data = row.model_dump()
         data["sku_name"] = sku_name
         data["warehouse_name"] = warehouse.name if warehouse else ""
+        data["pack_quantity"] = pack_quantity
+        data["cartons"] = cartons
+        data["loose_packets"] = loose_packets
+        data["carton_label"] = carton_label(row.quantity_packets, pack_quantity)
+        data["cost_per_carton"] = round(row.cost_rate * pack_quantity, 2)
         result.append(data)
     return result
 

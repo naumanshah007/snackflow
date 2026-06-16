@@ -1,16 +1,18 @@
 "use client";
 
-import { Banknote, ClipboardList, LocateFixed, LogOut, MapPin, Plus, Save, Search, ShoppingCart, Store, Trash2 } from "lucide-react";
+import { Banknote, ClipboardList, LocateFixed, LogOut, MapPin, Plus, Save, Search, ShoppingCart, Store, Trash2, UserPlus } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
 import { apiFetch, clearToken, getToken, login, money } from "@/lib/api";
+import { cartonLabel, perCarton, toPackets } from "@/lib/cartons";
 import type { AnyRow } from "@/lib/types";
 
-type Tab = "shops" | "order" | "payment" | "visit";
-type MobileLine = { sku_id: string; quantity_packets: string; sale_rate: string; hint?: string };
+type Tab = "shops" | "order" | "payment" | "visit" | "newshop";
+type MobileLine = { sku_id: string; cartons: string; loose_packets: string; sale_rate_per_carton: string; hint?: string };
 
-const blankLine: MobileLine = { sku_id: "", quantity_packets: "1", sale_rate: "" };
+const blankLine: MobileLine = { sku_id: "", cartons: "1", loose_packets: "0", sale_rate_per_carton: "" };
+const blankShop = { name: "", owner_name: "", phone: "", area_route: "", address: "" };
 
 export default function MobilePage() {
   const [authed, setAuthed] = useState(false);
@@ -19,24 +21,29 @@ export default function MobilePage() {
   const [tab, setTab] = useState<Tab>("shops");
   const [shops, setShops] = useState<AnyRow[]>([]);
   const [skus, setSkus] = useState<AnyRow[]>([]);
+  const [inventory, setInventory] = useState<AnyRow[]>([]);
   const [selectedShopId, setSelectedShopId] = useState("");
   const [search, setSearch] = useState("");
   const [lines, setLines] = useState<MobileLine[]>([{ ...blankLine }]);
   const [payment, setPayment] = useState("0");
   const [paymentOnly, setPaymentOnly] = useState("");
+  const [summary, setSummary] = useState<AnyRow | null>(null);
+  const [newShop, setNewShop] = useState({ ...blankShop });
   const [visitStatus, setVisitStatus] = useState("SHOP_CLOSED");
   const [notes, setNotes] = useState("");
   const [message, setMessage] = useState("");
   const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null);
 
   const skuMap = useMemo(() => new Map(skus.map((sku) => [String(sku.id), sku])), [skus]);
+  const stockMap = useMemo(() => new Map(inventory.map((row) => [String(row.sku_id), row])), [inventory]);
   const selectedShop = shops.find((shop) => String(shop.id) === selectedShopId);
   const filteredShops = shops.filter((shop) => `${shop.name} ${shop.area_route || ""} ${shop.phone || ""}`.toLowerCase().includes(search.toLowerCase()));
 
   const load = async () => {
-    const [shopData, skuData] = await Promise.all([apiFetch<AnyRow[]>("/shops"), apiFetch<AnyRow[]>("/skus")]);
+    const [shopData, skuData, invData] = await Promise.all([apiFetch<AnyRow[]>("/shops"), apiFetch<AnyRow[]>("/skus"), apiFetch<AnyRow[]>("/inventory")]);
     setShops(shopData);
     setSkus(skuData);
+    setInventory(invData);
     if (!selectedShopId && shopData[0]) setSelectedShopId(String(shopData[0].id));
   };
 
@@ -47,6 +54,20 @@ export default function MobilePage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const loadSummary = async (shopId: string) => {
+    if (!shopId) return;
+    try {
+      setSummary(await apiFetch<AnyRow>(`/shops/${shopId}/collection-summary`));
+    } catch {
+      setSummary(null);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === "payment" && selectedShopId) loadSummary(selectedShopId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, selectedShopId]);
 
   const doLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -65,7 +86,7 @@ export default function MobilePage() {
     setAuthed(false);
   };
 
-  const captureGps = async () => {
+  const captureGps = async (saveToShop = true) => {
     setMessage("");
     if (!navigator.geolocation) {
       setMessage("GPS is not available in this browser");
@@ -76,13 +97,12 @@ export default function MobilePage() {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
         setGps({ lat, lng });
-        if (selectedShop) {
-          await apiFetch(`/shops/${selectedShop.id}`, {
-            method: "PUT",
-            body: { gps_latitude: lat, gps_longitude: lng }
-          });
+        if (saveToShop && selectedShop) {
+          await apiFetch(`/shops/${selectedShop.id}`, { method: "PUT", body: { gps_latitude: lat, gps_longitude: lng } });
           setMessage("GPS saved");
           await load();
+        } else {
+          setMessage("GPS captured");
         }
       },
       () => setMessage("Could not capture GPS"),
@@ -93,28 +113,30 @@ export default function MobilePage() {
   const updateLine = async (index: number, patch: Partial<MobileLine>) => {
     setLines((current) => current.map((line, lineIndex) => (lineIndex === index ? { ...line, ...patch } : line)));
     if (patch.sku_id && selectedShopId) {
+      const sku = skuMap.get(patch.sku_id);
+      const pack = sku?.pack_quantity || 24;
       try {
         const context = await apiFetch<AnyRow>(`/rates/shop/${selectedShopId}/sku/${patch.sku_id}`);
-        const rate = context.fixed_sale_rate ?? context.last_sale_rate ?? context.default_sale_rate;
+        const ratePerPacket = context.fixed_sale_rate ?? context.last_sale_rate ?? context.default_sale_rate;
+        const ratePerCarton = perCarton(ratePerPacket || sku?.default_sale_rate || 0, pack);
+        const label = context.fixed_sale_rate ? "Fixed" : context.last_sale_rate ? "Last" : "Default";
         setLines((current) =>
           current.map((line, lineIndex) =>
-            lineIndex === index
-              ? {
-                  ...line,
-                  sale_rate: String(rate || skuMap.get(patch.sku_id || "")?.default_sale_rate || ""),
-                  hint: `${context.fixed_sale_rate ? "Fixed" : context.last_sale_rate ? "Last" : "Default"} ${money(rate)}`
-                }
-              : line
+            lineIndex === index ? { ...line, sale_rate_per_carton: String(ratePerCarton || ""), hint: `${label} ${money(ratePerCarton)}/carton` } : line
           )
         );
       } catch {
-        const sku = skuMap.get(patch.sku_id);
-        if (sku) setLines((current) => current.map((line, lineIndex) => (lineIndex === index ? { ...line, sale_rate: String(sku.default_sale_rate || "") } : line)));
+        if (sku) setLines((current) => current.map((line, lineIndex) => (lineIndex === index ? { ...line, sale_rate_per_carton: String(perCarton(sku.default_sale_rate, pack) || "") } : line)));
       }
     }
   };
 
-  const orderTotal = lines.reduce((sum, line) => sum + Number(line.quantity_packets || 0) * Number(line.sale_rate || 0), 0);
+  const orderTotal = lines.reduce((sum, line) => {
+    const sku = skuMap.get(line.sku_id);
+    const pack = sku?.pack_quantity || 24;
+    const packets = toPackets(line.cartons, line.loose_packets, pack);
+    return sum + packets * ((Number(line.sale_rate_per_carton) || 0) / pack);
+  }, 0);
 
   const saveOrder = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -129,8 +151,9 @@ export default function MobilePage() {
           payment_received: Number(payment || 0),
           items: lines.map((line) => ({
             sku_id: Number(line.sku_id),
-            quantity_packets: Number(line.quantity_packets),
-            sale_rate: Number(line.sale_rate)
+            cartons: Number(line.cartons || 0),
+            loose_packets: Number(line.loose_packets || 0),
+            sale_rate_per_carton: Number(line.sale_rate_per_carton)
           })),
           notes: notes || null
         }
@@ -138,13 +161,7 @@ export default function MobilePage() {
       await apiFetch(`/sales/${sale.id}/confirm`, { method: "POST" });
       await apiFetch("/shop-visits", {
         method: "POST",
-        body: {
-          shop_id: selectedShop.id,
-          status: "ORDER_TAKEN",
-          gps_latitude: gps?.lat ?? null,
-          gps_longitude: gps?.lng ?? null,
-          notes
-        }
+        body: { shop_id: selectedShop.id, status: "ORDER_TAKEN", gps_latitude: gps?.lat ?? null, gps_longitude: gps?.lng ?? null, notes }
       });
       setMessage("Order delivered");
       setLines([{ ...blankLine }]);
@@ -163,12 +180,39 @@ export default function MobilePage() {
     try {
       await apiFetch("/payments", { method: "POST", body: { shop_id: selectedShop.id, amount: Number(paymentOnly), method: "cash", notes } });
       await apiFetch("/shop-visits", { method: "POST", body: { shop_id: selectedShop.id, status: "PAYMENT_ONLY", gps_latitude: gps?.lat ?? null, gps_longitude: gps?.lng ?? null, notes } });
-      setMessage("Payment saved");
+      const updated = await apiFetch<AnyRow>(`/shops/${selectedShop.id}/collection-summary`);
+      setSummary(updated);
+      setMessage(`Payment collected: ${money(paymentOnly)}. New pending balance: ${money(updated.remaining_balance)}.`);
       setPaymentOnly("");
       setNotes("");
       await load();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Payment failed");
+    }
+  };
+
+  const saveNewShop = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setMessage("");
+    try {
+      await apiFetch("/shops", {
+        method: "POST",
+        body: {
+          name: newShop.name,
+          owner_name: newShop.owner_name || null,
+          phone: newShop.phone || null,
+          area_route: newShop.area_route || null,
+          address: newShop.address || null,
+          gps_latitude: gps?.lat ?? null,
+          gps_longitude: gps?.lng ?? null
+        }
+      });
+      setMessage("New shop submitted. It is pending admin approval before it becomes active.");
+      setNewShop({ ...blankShop });
+      await load();
+      setTab("shops");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not add shop");
     }
   };
 
@@ -178,13 +222,7 @@ export default function MobilePage() {
     try {
       await apiFetch("/shop-visits", {
         method: "POST",
-        body: {
-          shop_id: selectedShop.id,
-          status: visitStatus,
-          gps_latitude: gps?.lat ?? null,
-          gps_longitude: gps?.lng ?? null,
-          notes
-        }
+        body: { shop_id: selectedShop.id, status: visitStatus, gps_latitude: gps?.lat ?? null, gps_longitude: gps?.lng ?? null, notes }
       });
       setMessage("Visit saved");
       setNotes("");
@@ -199,8 +237,8 @@ export default function MobilePage() {
         <form onSubmit={doLogin} className="mx-auto w-full max-w-sm rounded-lg border border-white/80 bg-white/95 p-5 shadow-premium backdrop-blur">
           <Image src="/logo.png" alt="Zaib Brothers" width={360} height={120} className="mb-6 h-auto w-52 object-contain" priority />
           <div className="mb-5 rounded-lg bg-slate-950 p-4 text-white">
-            <div className="text-xs font-semibold uppercase text-orange-200">Mobile route mode</div>
-            <div className="mt-2 text-2xl font-bold">Fast orders, payments, and GPS visits.</div>
+            <div className="text-xs font-semibold uppercase text-orange-200">SnackFlow · Order booker</div>
+            <div className="mt-2 text-2xl font-bold">Cartons, payments, and GPS visits.</div>
           </div>
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-700">Username</span>
@@ -226,7 +264,7 @@ export default function MobilePage() {
             <LogOut size={18} />
           </button>
         </div>
-        {selectedShop && (
+        {selectedShop && tab !== "newshop" && (
           <div className="mt-3 rounded-lg bg-slate-950 p-4 text-white shadow-lift">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -234,12 +272,13 @@ export default function MobilePage() {
                 <div className="mt-1 text-lg font-bold leading-tight">{selectedShop.name}</div>
               </div>
               <div className="text-right">
-                <div className="text-xs text-slate-300">Balance</div>
+                <div className="text-xs text-slate-300">Pending</div>
                 <div className="font-bold text-green-200">{money(selectedShop.current_balance)}</div>
               </div>
             </div>
             <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-300">
               <span className="truncate">{selectedShop.area_route || selectedShop.phone || "No route assigned"}</span>
+              {selectedShop.status === "PENDING_APPROVAL" && <span className="rounded bg-orange-500/20 px-2 py-1 text-orange-100">Pending approval</span>}
               {selectedShop.gps_latitude && selectedShop.gps_longitude ? <span className="rounded bg-green-500/15 px-2 py-1 text-green-100">GPS saved</span> : <span className="rounded bg-orange-500/15 px-2 py-1 text-orange-100">GPS needed</span>}
             </div>
           </div>
@@ -250,6 +289,9 @@ export default function MobilePage() {
       <section className="mx-auto max-w-3xl px-4 py-4">
         {tab === "shops" && (
           <div className="space-y-3">
+            <button onClick={() => setTab("newshop")} className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-3 text-sm font-semibold text-white shadow-lift">
+              <UserPlus size={18} /> Add new shop
+            </button>
             <label className="flex items-center gap-2 rounded-lg border border-white/80 bg-white/95 px-3 py-3 shadow-premium backdrop-blur">
               <Search size={18} className="text-slate-500" />
               <input className="w-full bg-transparent text-base outline-none placeholder:text-slate-400" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search shops" />
@@ -259,25 +301,28 @@ export default function MobilePage() {
                 <button onClick={() => setSelectedShopId(String(shop.id))} className="w-full text-left">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="font-semibold text-slate-950">{shop.name}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-semibold text-slate-950">{shop.name}</div>
+                        {shop.status === "PENDING_APPROVAL" && <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700">Pending</span>}
+                      </div>
                       <div className="mt-1 text-sm text-slate-500">{shop.owner_name || shop.phone || shop.area_route}</div>
                     </div>
                     <div className="rounded-md bg-slate-950 px-3 py-2 text-right text-sm font-semibold text-white">{money(shop.current_balance)}</div>
                   </div>
                 </button>
                 <div className="mt-4 grid grid-cols-3 gap-2">
-                  <button type="button" onClick={() => setTab("order")} className="rounded-md bg-orange-600 px-3 py-3 text-sm font-semibold text-white shadow-lift">
+                  <button type="button" onClick={() => { setSelectedShopId(String(shop.id)); setTab("order"); }} className="rounded-md bg-orange-600 px-3 py-3 text-sm font-semibold text-white shadow-lift">
                     Order
                   </button>
-                  <button type="button" onClick={() => setTab("payment")} className="rounded-md bg-green-600 px-3 py-3 text-sm font-semibold text-white shadow-lift">
-                    Pay
+                  <button type="button" onClick={() => { setSelectedShopId(String(shop.id)); setTab("payment"); }} className="rounded-md bg-green-600 px-3 py-3 text-sm font-semibold text-white shadow-lift">
+                    Collect
                   </button>
                   {shop.gps_latitude && shop.gps_longitude ? (
                     <a href={`https://www.google.com/maps?q=${shop.gps_latitude},${shop.gps_longitude}`} target="_blank" className="rounded-md border border-slate-200 bg-white px-3 py-3 text-center text-sm font-semibold text-slate-700 shadow-sm">
                       Map
                     </a>
                   ) : (
-                    <button type="button" onClick={captureGps} className="rounded-md border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-700 shadow-sm">
+                    <button type="button" onClick={() => { setSelectedShopId(String(shop.id)); captureGps(); }} className="rounded-md border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-700 shadow-sm">
                       GPS
                     </button>
                   )}
@@ -289,29 +334,43 @@ export default function MobilePage() {
 
         {tab === "order" && (
           <form onSubmit={saveOrder} className="space-y-3">
-            {lines.map((line, index) => (
-              <div key={index} className="rounded-lg border border-white/80 bg-white/95 p-3 shadow-premium backdrop-blur">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="rounded bg-slate-100 px-2 py-1 text-sm font-semibold text-slate-800">Item {index + 1}</span>
-                  <button type="button" onClick={() => setLines((current) => current.filter((_, lineIndex) => lineIndex !== index))} className="rounded-md border border-slate-200 bg-white p-2 text-slate-500 shadow-sm">
-                    <Trash2 size={18} />
-                  </button>
+            {lines.map((line, index) => {
+              const stock = stockMap.get(line.sku_id);
+              return (
+                <div key={index} className="rounded-lg border border-white/80 bg-white/95 p-3 shadow-premium backdrop-blur">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="rounded bg-slate-100 px-2 py-1 text-sm font-semibold text-slate-800">Item {index + 1}</span>
+                    <button type="button" onClick={() => setLines((current) => current.filter((_, lineIndex) => lineIndex !== index))} className="rounded-md border border-slate-200 bg-white p-2 text-slate-500 shadow-sm">
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                  <select className="field-lg" value={line.sku_id} onChange={(event) => updateLine(index, { sku_id: event.target.value })} required>
+                    <option value="">Select product</option>
+                    {skus.map((sku) => (
+                      <option key={sku.id} value={sku.id}>
+                        {sku.display_name}
+                      </option>
+                    ))}
+                  </select>
+                  {line.sku_id && <div className="mt-1 text-xs font-medium text-slate-600">Available: {stock ? stock.carton_label : "0 pkts"}</div>}
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    <label>
+                      <span className="mb-1 block text-[11px] font-semibold uppercase text-slate-500">Cartons</span>
+                      <input className="field-lg" type="number" min="0" value={line.cartons} onChange={(event) => updateLine(index, { cartons: event.target.value })} />
+                    </label>
+                    <label>
+                      <span className="mb-1 block text-[11px] font-semibold uppercase text-slate-500">+ Pkts</span>
+                      <input className="field-lg" type="number" min="0" value={line.loose_packets} onChange={(event) => updateLine(index, { loose_packets: event.target.value })} />
+                    </label>
+                    <label>
+                      <span className="mb-1 block text-[11px] font-semibold uppercase text-slate-500">Rate/ctn</span>
+                      <input className="field-lg" type="number" min="0" step="0.01" value={line.sale_rate_per_carton} onChange={(event) => updateLine(index, { sale_rate_per_carton: event.target.value })} />
+                    </label>
+                  </div>
+                  <div className="mt-2 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">{line.hint || "Rate per carton loads after product selection"}</div>
                 </div>
-                <select className="field-lg" value={line.sku_id} onChange={(event) => updateLine(index, { sku_id: event.target.value })} required>
-                  <option value="">Select SKU</option>
-                  {skus.map((sku) => (
-                    <option key={sku.id} value={sku.id}>
-                      {sku.display_name}
-                    </option>
-                  ))}
-                </select>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <input className="field-lg" type="number" min="1" value={line.quantity_packets} onChange={(event) => updateLine(index, { quantity_packets: event.target.value })} />
-                  <input className="field-lg" type="number" min="0" step="0.01" value={line.sale_rate} onChange={(event) => updateLine(index, { sale_rate: event.target.value })} />
-                </div>
-                <div className="mt-2 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">{line.hint || "Rate will load after SKU selection"}</div>
-              </div>
-            ))}
+              );
+            })}
             <button type="button" onClick={() => setLines((current) => [...current, { ...blankLine }])} className="btn-soft w-full py-3">
               <Plus size={18} /> Add item
             </button>
@@ -336,13 +395,50 @@ export default function MobilePage() {
         )}
 
         {tab === "payment" && (
-          <form onSubmit={savePayment} className="space-y-3 rounded-lg border border-white/80 bg-white/95 p-4 shadow-premium backdrop-blur">
-            <div className="eyebrow">Payment collection</div>
-            <input className="field-lg text-lg" type="number" min="1" value={paymentOnly} onChange={(event) => setPaymentOnly(event.target.value)} placeholder="Payment amount" required />
-            <textarea className="field-lg min-h-20" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Notes" />
-            <button className="flex w-full items-center justify-center gap-2 rounded-md bg-green-600 px-4 py-4 font-semibold text-white shadow-lift">
-              <Banknote size={20} /> Save payment
+          <div className="space-y-3">
+            {summary && (
+              <div className="rounded-lg border border-white/80 bg-white/95 p-4 shadow-premium backdrop-blur">
+                <div className="eyebrow">Collection</div>
+                <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
+                  <Stat label="Previous balance" value={money(summary.previous_balance)} />
+                  <Stat label="Today's bill" value={money(summary.today_bill)} />
+                  <Stat label="Total payable" value={money(summary.total_payable)} />
+                  <Stat label="Collected today" value={money(summary.collected_today)} />
+                  <Stat label="Remaining balance" value={money(summary.remaining_balance)} highlight />
+                  <Stat label="Last payment" value={summary.last_payment_date ? new Date(summary.last_payment_date).toLocaleDateString() : "—"} />
+                </div>
+              </div>
+            )}
+            <form onSubmit={savePayment} className="space-y-3 rounded-lg border border-white/80 bg-white/95 p-4 shadow-premium backdrop-blur">
+              <div className="eyebrow">Payment collection</div>
+              <input className="field-lg text-lg" type="number" min="1" value={paymentOnly} onChange={(event) => setPaymentOnly(event.target.value)} placeholder="Amount collected" required />
+              <textarea className="field-lg min-h-20" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Notes" />
+              <div className="text-xs text-slate-500">Collection date &amp; time are recorded automatically as now.</div>
+              <button className="flex w-full items-center justify-center gap-2 rounded-md bg-green-600 px-4 py-4 font-semibold text-white shadow-lift">
+                <Banknote size={20} /> Save payment
+              </button>
+            </form>
+          </div>
+        )}
+
+        {tab === "newshop" && (
+          <form onSubmit={saveNewShop} className="space-y-3 rounded-lg border border-white/80 bg-white/95 p-4 shadow-premium backdrop-blur">
+            <div className="eyebrow">New shop · pending approval</div>
+            <input className="field-lg" value={newShop.name} onChange={(event) => setNewShop((current) => ({ ...current, name: event.target.value }))} placeholder="Shop name" required />
+            <input className="field-lg" value={newShop.owner_name} onChange={(event) => setNewShop((current) => ({ ...current, owner_name: event.target.value }))} placeholder="Owner / shopkeeper name" />
+            <input className="field-lg" value={newShop.phone} onChange={(event) => setNewShop((current) => ({ ...current, phone: event.target.value }))} placeholder="Phone" />
+            <input className="field-lg" value={newShop.area_route} onChange={(event) => setNewShop((current) => ({ ...current, area_route: event.target.value }))} placeholder="Area / route" />
+            <textarea className="field-lg min-h-20" value={newShop.address} onChange={(event) => setNewShop((current) => ({ ...current, address: event.target.value }))} placeholder="Address" />
+            <button type="button" onClick={() => captureGps(false)} className="btn-soft w-full py-3">
+              <LocateFixed size={18} /> {gps ? `GPS ${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}` : "Capture GPS"}
             </button>
+            <div className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">Warehouse and order booker are assigned automatically from your account. Admin will approve before it goes active.</div>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setTab("shops")} className="btn-soft py-3">Cancel</button>
+              <button className="btn-primary py-3">
+                <Save size={18} /> Submit shop
+              </button>
+            </div>
           </form>
         )}
 
@@ -356,7 +452,7 @@ export default function MobilePage() {
               <option value="DELIVERY_DONE">Delivery done</option>
             </select>
             <textarea className="field-lg min-h-24" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Notes" />
-            <button onClick={captureGps} className="btn-soft w-full py-3">
+            <button onClick={() => captureGps()} className="btn-soft w-full py-3">
               <LocateFixed size={20} /> Capture GPS
             </button>
             <button onClick={saveVisit} className="btn-dark w-full py-4">
@@ -370,7 +466,7 @@ export default function MobilePage() {
         {([
           ["shops", Store, "Shops"],
           ["order", ShoppingCart, "Order"],
-          ["payment", Banknote, "Pay"],
+          ["payment", Banknote, "Collect"],
           ["visit", MapPin, "Visit"]
         ] as const).map(([value, Icon, label]) => {
           const TypedIcon = Icon as typeof Store;
@@ -383,5 +479,14 @@ export default function MobilePage() {
         })}
       </nav>
     </main>
+  );
+}
+
+function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div className={`rounded-md border px-3 py-2 ${highlight ? "border-green-200 bg-green-50" : "border-slate-200 bg-slate-50"}`}>
+      <div className="text-[11px] uppercase text-slate-500">{label}</div>
+      <div className={`mt-0.5 font-bold ${highlight ? "text-green-700" : "text-slate-900"}`}>{value}</div>
+    </div>
   );
 }

@@ -1,6 +1,21 @@
-# SnackFlow
+# SnackFlow — Distribution Management System for Zaib Brothers
 
 SnackFlow is a production-ready MVP for snack distribution: warehouse-specific stock, editable SKU pricing with audit history, shop ledgers, sales confirmation/reversal, partial returns, payments, expenses, reports, GPS shops, and a mobile order-booker flow.
+
+**SnackFlow** is the system/product name; **Zaib Brothers** is the business name.
+
+## Carton-First UI
+
+The business thinks and sells in **cartons**. Stock is stored internally in **packets** for accuracy, and every user-facing surface (inventory, stock receive, stock ledger, sales, mobile order booker, SKU prices, reports, CSV exports) is carton-first:
+
+```
+cartons       = floor(quantity_packets / pack_quantity)   ->  "12 cartons + 5 pkts"
+loose_packets = quantity_packets % pack_quantity
+cost_per_carton      = cost_per_packet      * pack_quantity
+sale_rate_per_carton = sale_rate_per_packet * pack_quantity
+```
+
+The 2026-06-15 client feedback and the fixes applied are recorded in [`CLIENT_FEEDBACK_2026_06_15.md`](CLIENT_FEEDBACK_2026_06_15.md).
 
 ## Stack
 
@@ -73,6 +88,7 @@ npm run dev
 Admin:
 
 - `/dashboard`
+- `/distribution` (Distribution Control: stock, receive, ledger overview)
 - `/products`
 - `/skus`
 - `/rates`

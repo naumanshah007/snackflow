@@ -11,6 +11,7 @@ from app.models import (
     User,
     utc_now,
 )
+from app.carton import carton_label
 from app.schemas import StockAdjustmentCreate, StockReceiptCreate
 from app.services.audit import write_audit
 
@@ -86,7 +87,7 @@ def apply_stock_movement(
     return balance
 
 
-def receive_stock(session: Session, payload: StockReceiptCreate, user: User) -> StockReceipt:
+def receive_stock(session: Session, payload: StockReceiptCreate, user: User) -> dict:
     if not payload.items:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Stock receipt requires at least one item")
 
@@ -107,7 +108,11 @@ def receive_stock(session: Session, payload: StockReceiptCreate, user: User) -> 
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"SKU {line.sku_id} not found or inactive")
 
         pack_quantity = line.pack_quantity or sku.pack_quantity
-        quantity_packets = line.quantity_received * pack_quantity if line.quantity_unit.lower() in {"carton", "bundle"} else line.quantity_received
+        loose_packets = line.loose_packets or 0
+        if line.quantity_unit.lower() in {"carton", "bundle"}:
+            quantity_packets = line.quantity_received * pack_quantity + loose_packets
+        else:
+            quantity_packets = line.quantity_received
         if quantity_packets <= 0:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Received quantity must be positive")
 
@@ -149,7 +154,31 @@ def receive_stock(session: Session, payload: StockReceiptCreate, user: User) -> 
     write_audit(session, user, "CREATE", "stock_receipt", receipt.id, None, payload.model_dump())
     session.commit()
     session.refresh(receipt)
-    return receipt
+
+    # Build a carton-friendly summary so the UI can confirm the new balance,
+    # e.g. "Stock updated: 10 cartons received. New balance: 35 cartons + 4 packets."
+    received_sku_ids = {line.sku_id for line in payload.items}
+    balances = []
+    for sku_id in received_sku_ids:
+        sku = session.get(SKU, sku_id)
+        balance = get_or_create_inventory(session, payload.warehouse_id, sku_id)
+        balances.append(
+            {
+                "sku_id": sku_id,
+                "sku_name": f"SKU {sku_id}" if not sku else f"Rs {sku.size_mrp:g} {sku.flavour or ''}".strip(),
+                "pack_quantity": sku.pack_quantity if sku else 1,
+                "total_packets": balance.quantity_packets,
+                "carton_label": carton_label(balance.quantity_packets, sku.pack_quantity if sku else 1),
+                "average_cost_per_packet": round(balance.average_cost_per_packet, 2),
+            }
+        )
+
+    data = receipt.model_dump()
+    data["balances"] = balances
+    data["message"] = "Stock received and inventory ledger updated. " + "; ".join(
+        f"{b['sku_name']} new balance: {b['carton_label']}" for b in balances
+    )
+    return data
 
 
 def adjust_stock(session: Session, payload: StockAdjustmentCreate, user: User) -> InventoryBalance:

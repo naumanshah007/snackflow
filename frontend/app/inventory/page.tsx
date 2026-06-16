@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { AdminShell } from "@/components/AdminShell";
 import { DataTable } from "@/components/DataTable";
 import { apiFetch, money, packets } from "@/lib/api";
+import { cartonLabel } from "@/lib/cartons";
 import { exportCsv } from "@/lib/csv";
 import type { AnyRow } from "@/lib/types";
 
@@ -58,7 +59,22 @@ export default function InventoryPage() {
         <button onClick={load} className="btn-dark">
           <RefreshCcw size={16} /> Apply
         </button>
-        <button onClick={() => exportCsv("inventory.csv", rows)} className="btn-soft">
+        <button
+          onClick={() =>
+            exportCsv("inventory.csv", rows, [
+              { key: "sku_name", header: "SKU" },
+              { key: "warehouse_name", header: "Warehouse" },
+              { key: "pack_quantity", header: "Pack Quantity" },
+              { key: "cartons", header: "Cartons" },
+              { key: "loose_packets", header: "Loose Packets" },
+              { key: "available_packets", header: "Total Packets" },
+              { key: "average_cost_per_carton", header: "Cost per Carton" },
+              { key: "average_cost_per_packet", header: "Cost per Packet" },
+              { key: "stock_value", header: "Stock Value" }
+            ])
+          }
+          className="btn-soft"
+        >
           <Download size={16} /> CSV
         </button>
       </div>
@@ -67,10 +83,18 @@ export default function InventoryPage() {
         columns={[
           { key: "warehouse_name", label: "Warehouse" },
           { key: "sku_name", label: "SKU" },
-          { key: "available_packets", label: "Packets", render: (row) => packets(row.available_packets) },
-          { key: "cartons", label: "Cartons" },
-          { key: "loose_packets", label: "Loose" },
-          { key: "average_cost_per_packet", label: "Avg Cost", render: (row) => money(row.average_cost_per_packet) },
+          {
+            key: "carton_label",
+            label: "Stock (cartons)",
+            render: (row) => (
+              <div>
+                <div className="font-semibold text-slate-900">{row.carton_label || cartonLabel(row.available_packets, row.pack_quantity)}</div>
+                <div className="text-xs text-slate-500">{packets(row.available_packets)} packets · {row.pack_quantity}/carton</div>
+              </div>
+            )
+          },
+          { key: "average_cost_per_carton", label: "Cost / Carton", render: (row) => money(row.average_cost_per_carton) },
+          { key: "average_cost_per_packet", label: "Cost / Packet", render: (row) => money(row.average_cost_per_packet) },
           { key: "stock_value", label: "Value", render: (row) => money(row.stock_value) },
           { key: "low_stock", label: "Status", render: (row) => (row.low_stock ? <span className="rounded bg-red-50 px-2 py-1 text-red-700">Low</span> : "OK") }
         ]}

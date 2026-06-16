@@ -15,6 +15,7 @@ from app.models import (
     Shop,
     ShopLedger,
     ShopRateRule,
+    ShopStatus,
     User,
     UserRole,
     Warehouse,
@@ -27,6 +28,7 @@ from app.schemas import (
     ProductUpdate,
     RateRuleCreate,
     RateRuleUpdate,
+    ShopApprovalRequest,
     ShopCreate,
     ShopUpdate,
     SKUCreate,
@@ -288,6 +290,11 @@ def list_skus(
         data = model_snapshot(sku)
         data["product_name"] = product.name if product else ""
         data["display_name"] = f"{data['product_name']} Rs {sku.size_mrp:g} {sku.flavour or ''} - {sku.pack_quantity} Pack".strip()
+        pack = sku.pack_quantity or 1
+        # Carton-first pricing: the business sells in cartons, packets are stored internally.
+        data["cost_per_carton"] = round(sku.cost_price * pack, 2)
+        data["default_sale_rate_per_carton"] = round(sku.default_sale_rate * pack, 2)
+        data["minimum_sale_rate_per_carton"] = round(sku.minimum_sale_rate * pack, 2)
         result.append(data)
     return result
 
@@ -345,6 +352,7 @@ def list_shops(
     search: str | None = None,
     warehouse_id: int | None = None,
     order_booker_id: int | None = None,
+    status_filter: ShopStatus | None = None,
     offset: int = 0,
     limit: int = Query(default=200, le=1000),
     current_user: User = Depends(get_current_user),
@@ -358,6 +366,8 @@ def list_shops(
         query = query.where(Shop.assigned_order_booker_id == current_user.id)
     elif order_booker_id:
         query = query.where(Shop.assigned_order_booker_id == order_booker_id)
+    if status_filter:
+        query = query.where(Shop.status == status_filter)
     if search:
         query = query.where(or_(Shop.name.ilike(f"%{search}%"), Shop.owner_name.ilike(f"%{search}%"), Shop.area_route.ilike(f"%{search}%")))
     return session.exec(_paginate(query.order_by(Shop.name), offset, limit)).all()
@@ -371,7 +381,17 @@ def create_shop(
 ):
     if current_user.role not in {UserRole.OWNER, UserRole.ORDER_BOOKER}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
-    shop = Shop(**payload.model_dump(), current_balance=0)
+    data = payload.model_dump()
+    if current_user.role == UserRole.ORDER_BOOKER:
+        # Order bookers can register new shops on their own route only. The shop
+        # is scoped to their warehouse + themselves and waits for admin approval.
+        if not current_user.assigned_warehouse_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order booker has no assigned warehouse")
+        data["assigned_warehouse_id"] = current_user.assigned_warehouse_id
+        data["assigned_order_booker_id"] = current_user.id
+        shop = Shop(**data, current_balance=0, status=ShopStatus.PENDING_APPROVAL)
+    else:
+        shop = Shop(**data, current_balance=0, status=ShopStatus.ACTIVE)
     session.add(shop)
     session.flush()
     if payload.opening_balance:
@@ -416,6 +436,29 @@ def update_shop(
     old = model_snapshot(shop)
     _apply_updates(shop, payload)
     write_audit(session, current_user, "UPDATE", "shop", shop.id, old, model_snapshot(shop))
+    session.commit()
+    session.refresh(shop)
+    return shop
+
+
+@router.post("/shops/{shop_id}/approval")
+def set_shop_approval(
+    shop_id: int,
+    payload: ShopApprovalRequest,
+    current_user: User = Depends(require_roles(UserRole.OWNER, UserRole.ACCOUNTANT)),
+    session: Session = Depends(get_session),
+):
+    shop = session.get(Shop, shop_id)
+    if not shop:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shop not found")
+    old = model_snapshot(shop)
+    shop.status = payload.status
+    # A rejected shop is also deactivated so it never appears in sale pickers.
+    shop.is_active = payload.status != ShopStatus.REJECTED
+    if payload.notes:
+        shop.notes = (f"{shop.notes}\n" if shop.notes else "") + payload.notes
+    shop.updated_at = utc_now()
+    write_audit(session, current_user, "APPROVAL", "shop", shop.id, old, model_snapshot(shop))
     session.commit()
     session.refresh(shop)
     return shop

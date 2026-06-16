@@ -1,11 +1,12 @@
 "use client";
 
-import { Clock3, Plus, RefreshCcw, Save } from "lucide-react";
+import { Clock3, Download, Plus, RefreshCcw, Save } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/AdminShell";
 import { DataTable } from "@/components/DataTable";
 import { apiFetch } from "@/lib/api";
+import { exportCsv, type CsvColumn } from "@/lib/csv";
 import type { AnyRow, ColumnConfig, FieldConfig, Option } from "@/lib/types";
 
 function coerceValue(field: FieldConfig, value: any) {
@@ -20,13 +21,17 @@ export function ResourcePage({
   endpoint,
   fields,
   columns,
-  historyEndpoint
+  historyEndpoint,
+  exportFilename,
+  exportColumns
 }: {
   title: string;
   endpoint: string;
   fields: FieldConfig[];
   columns: ColumnConfig[];
   historyEndpoint?: (row: AnyRow) => string;
+  exportFilename?: string;
+  exportColumns?: CsvColumn[];
 }) {
   const [rows, setRows] = useState<AnyRow[]>([]);
   const [form, setForm] = useState<AnyRow>({});
@@ -135,9 +140,16 @@ export function ResourcePage({
               <h1 className="mt-1 text-2xl font-bold text-slate-950">{title}</h1>
               <p className="mt-1 max-w-2xl text-sm text-slate-500">Edit operational records with audit history preserved for price, rate, and ledger-sensitive changes.</p>
             </div>
-            <button onClick={loadRows} className="btn-soft">
-              <RefreshCcw size={16} /> Refresh
-            </button>
+            <div className="flex gap-2">
+              {exportColumns && (
+                <button onClick={() => exportCsv(exportFilename || `${title.toLowerCase()}.csv`, rows, exportColumns)} className="btn-soft">
+                  <Download size={16} /> CSV
+                </button>
+              )}
+              <button onClick={loadRows} className="btn-soft">
+                <RefreshCcw size={16} /> Refresh
+              </button>
+            </div>
           </div>
           <DataTable
             rows={rows}
@@ -157,7 +169,7 @@ export function ResourcePage({
           />
         </section>
 
-        <aside className="space-y-4">
+        <aside className="space-y-4 xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:self-start xl:overflow-y-auto xl:pr-1">
           <form onSubmit={submit} className="premium-panel p-4">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>

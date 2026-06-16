@@ -18,6 +18,7 @@ from app.models import (
     UserRole,
     utc_now,
 )
+from app.carton import to_packets
 from app.schemas import ReverseSaleRequest, SaleCreate, SaleReturnCreate
 from app.services.audit import write_audit
 from app.services.ledger import add_shop_ledger_entry
@@ -77,17 +78,28 @@ def create_sale(session: Session, payload: SaleCreate, user: User) -> Sale:
         sku = session.get(SKU, line.sku_id)
         if not sku or not sku.is_active:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"SKU {line.sku_id} not found or inactive")
-        _assert_sale_rate_allowed(session, user, shop.id, sku, line.sale_rate)
+        pack_quantity = sku.pack_quantity or 1
+        quantity_packets = line.quantity_packets
+        if quantity_packets is None:
+            quantity_packets = to_packets(line.cartons, line.loose_packets, pack_quantity)
+        if not quantity_packets or quantity_packets <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Sale quantity for SKU {sku.id} must be greater than zero")
+        sale_rate = line.sale_rate
+        if sale_rate is None and line.sale_rate_per_carton is not None:
+            sale_rate = round(line.sale_rate_per_carton / pack_quantity, 4)
+        if sale_rate is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Sale rate for SKU {sku.id} is required")
+        _assert_sale_rate_allowed(session, user, shop.id, sku, sale_rate)
         inventory = get_or_create_inventory(session, warehouse_id, sku.id)
         cost_rate = inventory.average_cost_per_packet or sku.cost_price
-        line_total = round(line.quantity_packets * line.sale_rate, 2)
-        line_cost = round(line.quantity_packets * cost_rate, 2)
+        line_total = round(quantity_packets * sale_rate, 2)
+        line_cost = round(quantity_packets * cost_rate, 2)
         item = SaleItem(
             sale_id=sale.id,
             sku_id=sku.id,
-            quantity_packets=line.quantity_packets,
-            pack_quantity=sku.pack_quantity,
-            sale_rate=line.sale_rate,
+            quantity_packets=quantity_packets,
+            pack_quantity=pack_quantity,
+            sale_rate=sale_rate,
             cost_rate=cost_rate,
             line_total=line_total,
             line_profit=round(line_total - line_cost, 2),

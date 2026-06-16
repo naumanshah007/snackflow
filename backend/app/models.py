@@ -50,6 +50,12 @@ class SaleStatus(str, Enum):
     PARTIALLY_RETURNED = "PARTIALLY_RETURNED"
 
 
+class ShopStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    PENDING_APPROVAL = "PENDING_APPROVAL"
+    REJECTED = "REJECTED"
+
+
 class VisitStatus(str, Enum):
     SHOP_CLOSED = "SHOP_CLOSED"
     NO_ORDER = "NO_ORDER"
@@ -158,6 +164,7 @@ class Shop(SQLModel, table=True):
     opening_balance: float = 0
     current_balance: float = 0
     notes: str | None = None
+    status: ShopStatus = Field(default=ShopStatus.ACTIVE, index=True)
     is_active: bool = True
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

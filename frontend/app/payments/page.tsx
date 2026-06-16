@@ -1,11 +1,12 @@
 "use client";
 
-import { Save } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Download, Save } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/AdminShell";
 import { DataTable } from "@/components/DataTable";
 import { apiFetch, money } from "@/lib/api";
+import { exportCsv } from "@/lib/csv";
 import type { AnyRow } from "@/lib/types";
 
 export default function PaymentsPage() {
@@ -18,12 +19,24 @@ export default function PaymentsPage() {
   const [notes, setNotes] = useState("");
   const [message, setMessage] = useState("");
 
+  const shopMap = useMemo(() => new Map(shops.map((shop) => [String(shop.id), shop])), [shops]);
+
   const load = async () => {
     const [shopData, paymentData] = await Promise.all([apiFetch<AnyRow[]>("/shops"), apiFetch<AnyRow[]>("/payments")]);
     setShops(shopData);
     setPayments(paymentData);
     if (!shopId && shopData[0]) setShopId(String(shopData[0].id));
   };
+
+  const exportPayments = () =>
+    exportCsv("payments.csv", payments, [
+      { key: "payment_date", header: "Date/Time", value: (row) => new Date(row.payment_date as string).toLocaleString() },
+      { key: "shop", header: "Shop", value: (row) => shopMap.get(String(row.shop_id))?.name ?? row.shop_id },
+      { key: "created_by_id", header: "Collected By (User)" },
+      { key: "amount", header: "Amount Collected" },
+      { key: "method", header: "Method" },
+      { key: "remaining", header: "Shop Remaining Balance", value: (row) => shopMap.get(String(row.shop_id))?.current_balance ?? "" }
+    ]);
 
   useEffect(() => {
     load().catch((error) => setMessage(error.message));
@@ -100,12 +113,17 @@ export default function PaymentsPage() {
         </form>
 
         <section>
-          <h2 className="mb-3 font-semibold text-slate-950">Recent payments</h2>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-semibold text-slate-950">Recent payments</h2>
+            <button onClick={exportPayments} className="btn-soft">
+              <Download size={16} /> CSV
+            </button>
+          </div>
           <DataTable
             rows={payments}
             columns={[
-              { key: "payment_date", label: "Date", render: (row) => new Date(row.payment_date).toLocaleString() },
-              { key: "shop_id", label: "Shop ID" },
+              { key: "payment_date", label: "Date/Time", render: (row) => new Date(row.payment_date).toLocaleString() },
+              { key: "shop_id", label: "Shop", render: (row) => shopMap.get(String(row.shop_id))?.name ?? row.shop_id },
               { key: "amount", label: "Amount", render: (row) => money(row.amount) },
               { key: "method", label: "Method" },
               { key: "reference_number", label: "Reference" }

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlmodel import Session, select
 
+from app.carton import carton_label, split_cartons
 from app.database import get_session
 from app.dependencies import get_current_user, scoped_warehouse_id
 from app.models import Expense, InventoryBalance, Payment, Product, SKU, Sale, SaleItem, SaleReturnItem, SaleStatus, Shop, ShopVisit, User, UserRole, Warehouse
@@ -190,11 +191,18 @@ def item_sales(
     for sku_id, row in rows.items():
         sku = session.get(SKU, sku_id)
         product = session.get(Product, sku.product_id) if sku else None
+        pack_quantity = sku.pack_quantity if sku else 1
+        packets = int(row["packets"])
+        cartons, loose = split_cartons(packets, pack_quantity)
         result.append(
             {
                 "sku_id": sku_id,
                 "sku_name": f"{product.name if product else ''} Rs {sku.size_mrp:g} {sku.flavour or ''}".strip() if sku else "",
-                "packets": int(row["packets"]),
+                "pack_quantity": pack_quantity,
+                "cartons": cartons,
+                "loose_packets": loose,
+                "carton_label": carton_label(packets, pack_quantity),
+                "packets": packets,
                 "amount": round(float(row["amount"]), 2),
                 "profit": round(float(row["profit"]), 2),
             }
