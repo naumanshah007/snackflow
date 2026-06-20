@@ -33,7 +33,8 @@ SnackFlow is the system name; Zaib Brothers is the business name.
 21. Handover Checklist
 22. Carton-First Working
 23. App vs Link, and Costs
-24. 2026-06-15 Feedback Update
+24. Monthly Closing & Archive
+25. 2026-06-15 Feedback Update
 
 ## 1. Cover Page
 
@@ -139,7 +140,21 @@ Use Capture GPS to save the shop's current location. Use Open Map to check the s
 
 GPS is important because if the order booker changes, the new order booker can still find the shop.
 
+### Route Days (weekly route planning)
+
+Each shop can be assigned **route days** (Monday to Sunday, multi-select) on the Shops form. This is the weekly schedule of which days the shop is visited.
+
+- The shop card shows route-day chips; today's day is highlighted. Shops with none show "No route days".
+- Use the **Route day** filter at the top of the Shops page to see only the shops for a chosen day (a quick "shops by route day" view).
+- You can also set **working days** for each order booker on the Users page (Working / route days).
+- When the order booker opens the mobile app, the **Today's Route** card lists exactly the shops scheduled for today, so they know where to go first.
+
+To set route days: open a shop (or order booker), tap the day buttons (Mon, Tue, …) to toggle them on/off, then Save. Route days persist after refresh.
+
 ## 9. Order Booker Mobile Workflow
+
+At the top of the Shops tab, **Today's Route** shows the shops assigned to today's weekday with their pending balances. Tap any shop in the card to select it, then take an order or collect payment as usual. If no shops are scheduled for today, you can still pick any shop from the list below.
+
 
 1. Login from mobile.
 2. Open `/mobile`.
@@ -155,8 +170,8 @@ GPS is important because if the order booker changes, the new order booker can s
 12. Add more items.
 13. Check total bill.
 14. Enter payment received if any.
-15. Save delivered order.
-16. Review new pending balance.
+15. Book order.
+16. Review the booking in Sales.
 
 The mobile workflow also supports payment-only visits and shop closed/no order visit logging.
 
@@ -165,6 +180,8 @@ The mobile workflow also supports payment-only visits and shop closed/no order v
 Sale statuses include draft/booked, delivered/confirmed, cancelled, reversed, and partially returned.
 
 Stock reduces only after a delivered/confirmed sale. Booked or draft orders do not reduce stock.
+
+Order bookers only take bookings from the mobile app. Low stock is shown as information, but booking is still allowed; the stock check happens later when admin/warehouse confirms delivery.
 
 Shop pending formula:
 
@@ -260,6 +277,7 @@ Reports include:
 | Payment Recovery Report | Track collected payments | Owner, Accountant |
 | Shop Visit / Closed Shop Report | Track field activity | Owner |
 | Low Stock Report | Plan purchasing | Owner, Warehouse |
+| Monthly Closing | Backup month data and carry balances forward | Owner, Accountant |
 
 ## 17. Daily Business Routine
 
@@ -306,6 +324,7 @@ Evening:
 - Check daily reports.
 - Keep rates updated.
 - Backup database.
+- Run monthly closing only after downloading and checking the backup.
 - Review audit logs.
 
 ## 20. Glossary
@@ -340,6 +359,7 @@ Evening:
 - [ ] Partial return tested
 - [ ] Expense entered
 - [ ] Reports checked
+- [ ] Monthly closing backup tested
 - [ ] Manual handed over
 
 ## 22. Carton-First Working
@@ -359,6 +379,30 @@ The business sells in cartons. SnackFlow now shows and accepts cartons everywher
 
 **Costs.** Online usage may need hosting, database, storage, and domain, whose cost depends on the deployment choice (for example a cloud server with managed database and a domain name). Local-only use can avoid hosting cost but limits remote access for field order bookers.
 
-## 24. 2026-06-15 Feedback Update
+## 24. Monthly Closing & Archive
+
+Monthly Closing helps keep the live database smaller for free-tier hosting while preserving month-end backup files and opening balances.
+
+Admin workflow:
+
+1. Open Monthly Closing.
+2. Select the month to close.
+3. Review preview totals: sales, payments, expenses, gross profit, net profit, outstanding shop balance, warehouse closing stock, and transaction counts.
+4. Click Generate Backup and download the ZIP.
+5. Check that the ZIP contains the expected CSV files.
+6. Save the ZIP immediately to laptop/Google Drive.
+7. Click Close Month only after backup is downloaded and saved.
+
+The backup ZIP includes sales, sale items, payments, expenses, shop ledger, stock ledger, stock receipts/items, inventory balances, shops, SKUs, users summary without password hashes, and monthly summary.
+
+The ZIP is generated on demand and streamed to the browser. Serverless hosting such as Vercel should not be treated as permanent file storage. SnackFlow stores the backup filename, checksum, generated time, and monthly summary in the database; later download is regenerated from database rows when available.
+
+Closing creates next-month opening records for shop balances and warehouse/SKU inventory balances. It does not delete current balances.
+
+Strong warning: **This action should only be done after downloading backup. It cannot be undone unless backup is restored.**
+
+Phase 1 does not delete old detailed rows. Archive/delete is disabled by default and should only be enabled later after a separate archive policy is approved. Never blindly delete ledger history.
+
+## 25. 2026-06-15 Feedback Update
 
 This version applies the Zaib Brothers UAT feedback: carton-first inventory, stock, sales, mobile, SKU prices and reports; carton cost and carton sale price; stock receiving with date and new-balance confirmation; a working Distribution Control page; an Expenses tab; clear Reversal and Partial Return screens (open a sale and tap **View**); order bookers can add new shops (pending admin approval) and collect payments with the shop balance, today's bill, total payable, remaining balance, and last payment date shown. The full feedback log is in `CLIENT_FEEDBACK_2026_06_15.md`.

@@ -4,8 +4,10 @@ import { ExternalLink, LocateFixed, MapPin, Pencil, Plus, RefreshCcw, Save, Sear
 import { useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/AdminShell";
+import { WeekdayPicker } from "@/components/WeekdayPicker";
 import { apiFetch, money } from "@/lib/api";
 import type { AnyRow } from "@/lib/types";
+import { WEEKDAYS, shortDay, todayWeekday } from "@/lib/weekdays";
 
 type ShopForm = {
   name: string;
@@ -18,6 +20,7 @@ type ShopForm = {
   gps_longitude: string;
   assigned_warehouse_id: string;
   assigned_order_booker_id: string;
+  route_days: string[];
   credit_limit: string;
   opening_balance: string;
   notes: string;
@@ -35,11 +38,24 @@ const blankForm: ShopForm = {
   gps_longitude: "",
   assigned_warehouse_id: "",
   assigned_order_booker_id: "",
+  route_days: [],
   credit_limit: "",
   opening_balance: "0",
   notes: "",
   is_active: true
 };
+
+const STATUS_BADGE: Record<string, { label: string; className: string }> = {
+  ACTIVE: { label: "Active", className: "bg-green-50 text-green-700" },
+  PENDING_APPROVAL: { label: "Pending approval", className: "bg-orange-50 text-orange-700" },
+  REJECTED: { label: "Rejected", className: "bg-red-50 text-red-700" }
+};
+
+function statusBadge(shop: AnyRow) {
+  const status = String(shop.status || (shop.is_active ? "ACTIVE" : "")).toUpperCase();
+  if (STATUS_BADGE[status]) return STATUS_BADGE[status];
+  return shop.is_active ? STATUS_BADGE.ACTIVE : { label: "Inactive", className: "bg-slate-100 text-slate-600" };
+}
 
 function valueOrNull(value: string) {
   return value.trim() === "" ? null : value.trim();
@@ -56,21 +72,35 @@ export default function ShopsPage() {
   const [form, setForm] = useState<ShopForm>(blankForm);
   const [editingShop, setEditingShop] = useState<AnyRow | null>(null);
   const [search, setSearch] = useState("");
+  const [routeDayFilter, setRouteDayFilter] = useState("");
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"success" | "error">("error");
   const [loading, setLoading] = useState(false);
+
+  const showError = (text: string) => {
+    setMessageTone("error");
+    setMessage(text);
+  };
+  const showSuccess = (text: string) => {
+    setMessageTone("success");
+    setMessage(text);
+  };
 
   const orderBookers = users.filter((user) => user.role === "ORDER_BOOKER");
   const filteredShops = useMemo(() => {
     const term = search.toLowerCase().trim();
-    if (!term) return shops;
-    return shops.filter((shop) => `${shop.name} ${shop.owner_name || ""} ${shop.phone || ""} ${shop.area_route || ""} ${shop.address || ""}`.toLowerCase().includes(term));
-  }, [search, shops]);
+    return shops.filter((shop) => {
+      const matchesTerm = !term || `${shop.name} ${shop.owner_name || ""} ${shop.phone || ""} ${shop.area_route || ""} ${shop.address || ""}`.toLowerCase().includes(term);
+      const matchesDay = !routeDayFilter || (Array.isArray(shop.route_days) && shop.route_days.includes(routeDayFilter));
+      return matchesTerm && matchesDay;
+    });
+  }, [search, routeDayFilter, shops]);
 
   const stats = useMemo(() => {
-    const active = shops.filter((shop) => shop.is_active).length;
-    const gps = shops.filter((shop) => shop.gps_latitude && shop.gps_longitude).length;
+    const active = shops.filter((shop) => (shop.status ? shop.status === "ACTIVE" : shop.is_active)).length;
+    const pending = shops.filter((shop) => shop.status === "PENDING_APPROVAL").length;
     const balance = shops.reduce((sum, shop) => sum + Number(shop.current_balance || 0), 0);
-    return { active, gps, balance };
+    return { active, pending, balance };
   }, [shops]);
 
   const load = async () => {
@@ -86,7 +116,7 @@ export default function ShopsPage() {
         assigned_order_booker_id: current.assigned_order_booker_id || String(userData.find((user) => user.role === "ORDER_BOOKER")?.id || "")
       }));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not load shops");
+      showError(error instanceof Error ? error.message : "Could not load shops");
     } finally {
       setLoading(false);
     }
@@ -100,6 +130,7 @@ export default function ShopsPage() {
     setEditingShop(null);
     setForm({
       ...blankForm,
+      route_days: [],
       assigned_warehouse_id: String(warehouses[0]?.id || ""),
       assigned_order_booker_id: String(orderBookers[0]?.id || "")
     });
@@ -119,6 +150,7 @@ export default function ShopsPage() {
       gps_longitude: shop.gps_longitude == null ? "" : String(shop.gps_longitude),
       assigned_warehouse_id: shop.assigned_warehouse_id == null ? "" : String(shop.assigned_warehouse_id),
       assigned_order_booker_id: shop.assigned_order_booker_id == null ? "" : String(shop.assigned_order_booker_id),
+      route_days: Array.isArray(shop.route_days) ? shop.route_days : [],
       credit_limit: shop.credit_limit == null ? "" : String(shop.credit_limit),
       opening_balance: shop.opening_balance == null ? "0" : String(shop.opening_balance),
       notes: shop.notes || "",
@@ -161,6 +193,7 @@ export default function ShopsPage() {
       gps_longitude: numberOrNull(form.gps_longitude),
       assigned_warehouse_id: numberOrNull(form.assigned_warehouse_id),
       assigned_order_booker_id: numberOrNull(form.assigned_order_booker_id),
+      route_days: form.route_days,
       credit_limit: numberOrNull(form.credit_limit),
       notes: valueOrNull(form.notes),
       is_active: form.is_active
@@ -170,17 +203,17 @@ export default function ShopsPage() {
     }
 
     try {
+      const wasEditing = Boolean(editingShop);
       if (editingShop) {
         await apiFetch(`/shops/${editingShop.id}`, { method: "PUT", body: payload });
-        setMessage("Shop updated");
       } else {
         await apiFetch("/shops", { method: "POST", body: payload });
-        setMessage("Shop added");
       }
       await load();
-      if (!editingShop) startCreate();
+      if (!wasEditing) startCreate();
+      showSuccess(wasEditing ? "Shop saved — changes are live." : "Shop added — it now appears in the list below.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Save failed");
+      showError(error instanceof Error ? error.message : "Save failed");
     }
   };
 
@@ -209,9 +242,9 @@ export default function ShopsPage() {
               <div className="mt-1 text-xs text-slate-300">Active shops</div>
             </div>
             <div className="rounded-lg border border-white/10 bg-white/10 p-4">
-              <MapPin size={18} className="text-green-200" />
-              <div className="mt-3 text-2xl font-bold">{stats.gps}</div>
-              <div className="mt-1 text-xs text-slate-300">GPS saved</div>
+              <Store size={18} className="text-amber-200" />
+              <div className="mt-3 text-2xl font-bold">{stats.pending}</div>
+              <div className="mt-1 text-xs text-slate-300">Pending approval</div>
             </div>
             <div className="rounded-lg border border-white/10 bg-white/10 p-4">
               <Users size={18} className="text-sky-200" />
@@ -224,10 +257,22 @@ export default function ShopsPage() {
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_440px]">
         <section className="space-y-4">
-          <div className="surface-band p-4">
-            <label className="flex items-center gap-3 rounded-md border border-slate-200 bg-white px-3 py-3 shadow-sm">
+          <div className="surface-band flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+            <label className="flex flex-1 items-center gap-3 rounded-md border border-slate-200 bg-white px-3 py-3 shadow-sm">
               <Search size={18} className="text-slate-500" />
               <input className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by shop, owner, route, phone, or address" />
+            </label>
+            <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-3 shadow-sm">
+              <span className="text-xs font-semibold uppercase text-slate-500">Route day</span>
+              <select className="bg-transparent text-sm outline-none" value={routeDayFilter} onChange={(event) => setRouteDayFilter(event.target.value)}>
+                <option value="">All days</option>
+                {WEEKDAYS.map((day) => (
+                  <option key={day} value={day}>
+                    {day}
+                    {day === todayWeekday() ? " (today)" : ""}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
 
@@ -240,9 +285,23 @@ export default function ShopsPage() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <h2 className="truncate text-lg font-bold text-slate-950">{shop.name}</h2>
-                        <span className={`rounded px-2 py-1 text-xs font-semibold ${shop.is_active ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-600"}`}>{shop.is_active ? "Active" : "Inactive"}</span>
+                        {(() => {
+                          const badge = statusBadge(shop);
+                          return <span className={`rounded px-2 py-1 text-xs font-semibold ${badge.className}`}>{badge.label}</span>;
+                        })()}
                       </div>
                       <p className="mt-1 truncate text-sm text-slate-500">{shop.owner_name || "No owner"} · {shop.area_route || "No route"}</p>
+                      {Array.isArray(shop.route_days) && shop.route_days.length > 0 ? (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {shop.route_days.map((day: string) => (
+                            <span key={day} className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${day === todayWeekday() ? "bg-orange-100 text-orange-700" : "bg-slate-100 text-slate-600"}`}>
+                              {shortDay(day)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-2 text-[10px] font-semibold uppercase text-slate-400">No route days</div>
+                      )}
                     </div>
                     <button onClick={() => startEdit(shop)} className="inline-flex shrink-0 items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-sm font-semibold text-white shadow-lift hover:bg-slate-800">
                       <Pencil size={15} /> Edit
@@ -342,6 +401,10 @@ export default function ShopsPage() {
                   ))}
                 </select>
               </label>
+              <label className="sm:col-span-2 xl:col-span-1">
+                <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Route days</span>
+                <WeekdayPicker value={form.route_days} today={todayWeekday()} onChange={(next) => setForm((current) => ({ ...current, route_days: next }))} />
+              </label>
               <label>
                 <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Credit limit</span>
                 <input className="field" type="number" min="0" value={form.credit_limit} onChange={(event) => setForm((current) => ({ ...current, credit_limit: event.target.value }))} />
@@ -388,7 +451,15 @@ export default function ShopsPage() {
               <input type="checkbox" className="h-5 w-5 rounded border-slate-300 text-orange-600" checked={form.is_active} onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))} />
             </label>
 
-            {message && <div className="mt-3 rounded-md border border-orange-100 bg-orange-50 px-3 py-2 text-sm text-orange-800">{message}</div>}
+            {message && (
+              <div
+                className={`mt-3 rounded-md border px-3 py-2 text-sm ${
+                  messageTone === "success" ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-800"
+                }`}
+              >
+                {message}
+              </div>
+            )}
 
             <button className="btn-primary mt-4 w-full py-3">
               <Save size={18} /> {editingShop ? "Save Shop Changes" : "Add Shop"}

@@ -1,7 +1,9 @@
+import os
 from itertools import cycle
 
 from sqlmodel import Session, select
 
+from app.config import settings
 from app.database import create_db_and_tables, engine
 from app.models import (
     ExpenseCategory,
@@ -37,6 +39,18 @@ PRODUCT_MATRIX = {
     "Corn Stick": {"sizes": [50], "flavours": [None]},
 }
 
+TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
+
+
+def _env_truthy(name: str) -> bool:
+    value = os.getenv(name)
+    return bool(value and value.strip().lower() in TRUTHY_ENV_VALUES)
+
+
+def demo_seed_enabled() -> bool:
+    environment = os.getenv("ENVIRONMENT", settings.environment).strip().lower()
+    return _env_truthy("SNACKFLOW_DEMO_SEED") or settings.snackflow_demo_seed or environment == "development"
+
 
 def get_or_create(session: Session, model, defaults: dict | None = None, **lookup):
     obj = session.exec(select(model).filter_by(**lookup)).first()
@@ -48,47 +62,109 @@ def get_or_create(session: Session, model, defaults: dict | None = None, **looku
     return obj
 
 
+def _seed_demo_users(session: Session, warehouse_1: Warehouse, warehouse_2: Warehouse) -> tuple[User, User, User]:
+    admin = get_or_create(
+        session,
+        User,
+        username="admin",
+        defaults={
+            "name": "Owner Admin",
+            "phone": "03000000000",
+            "hashed_password": hash_password("admin123"),
+            "role": UserRole.OWNER,
+        },
+    )
+    booker_1 = get_or_create(
+        session,
+        User,
+        username="booker1",
+        defaults={
+            "name": "Booker 1",
+            "phone": "03000000001",
+            "hashed_password": hash_password("booker123"),
+            "role": UserRole.ORDER_BOOKER,
+            "assigned_warehouse_id": warehouse_1.id,
+            "route_days": ["Monday", "Wednesday", "Friday"],
+        },
+    )
+    booker_2 = get_or_create(
+        session,
+        User,
+        username="booker2",
+        defaults={
+            "name": "Booker 2",
+            "phone": "03000000002",
+            "hashed_password": hash_password("booker123"),
+            "role": UserRole.ORDER_BOOKER,
+            "assigned_warehouse_id": warehouse_2.id,
+            "route_days": ["Tuesday", "Thursday", "Saturday"],
+        },
+    )
+
+    # Demo mode is intentionally explicit. It may reset local/demo accounts, but
+    # production seed runs must preserve existing password hashes.
+    demo_updates = (
+        (admin, "Owner Admin", "03000000000", UserRole.OWNER, None, [], "admin123"),
+        (booker_1, "Booker 1", "03000000001", UserRole.ORDER_BOOKER, warehouse_1.id, ["Monday", "Wednesday", "Friday"], "booker123"),
+        (booker_2, "Booker 2", "03000000002", UserRole.ORDER_BOOKER, warehouse_2.id, ["Tuesday", "Thursday", "Saturday"], "booker123"),
+    )
+    for account, name, phone, role, warehouse_id, route_days, default_password in demo_updates:
+        account.name = name
+        account.phone = phone
+        account.role = role
+        account.assigned_warehouse_id = warehouse_id
+        account.route_days = route_days
+        account.is_active = True
+        account.hashed_password = hash_password(default_password)
+        session.add(account)
+    session.commit()
+    return admin, booker_1, booker_2
+
+
+def _ensure_initial_admin(session: Session) -> User | None:
+    existing_user = session.exec(select(User).order_by(User.id)).first()
+    if existing_user:
+        return session.exec(select(User).where(User.role == UserRole.OWNER).order_by(User.id)).first() or existing_user
+
+    username = os.getenv("INITIAL_ADMIN_USERNAME") or settings.initial_admin_username
+    password = os.getenv("INITIAL_ADMIN_PASSWORD") or settings.initial_admin_password
+    if not username and not password:
+        print("No users found. Set INITIAL_ADMIN_USERNAME and INITIAL_ADMIN_PASSWORD to create the first production admin.")
+        return None
+    if not username or not password:
+        raise RuntimeError("Both INITIAL_ADMIN_USERNAME and INITIAL_ADMIN_PASSWORD are required to create the first production admin")
+    username = username.strip()
+    if not username:
+        raise RuntimeError("INITIAL_ADMIN_USERNAME cannot be blank")
+    if len(password) < 8 or password in {"admin123", "booker123"}:
+        raise RuntimeError("INITIAL_ADMIN_PASSWORD must be at least 8 characters and must not use demo passwords")
+
+    admin = User(
+        name="Initial Admin",
+        username=username,
+        hashed_password=hash_password(password),
+        role=UserRole.OWNER,
+    )
+    session.add(admin)
+    session.commit()
+    session.refresh(admin)
+    print("Created initial production admin from INITIAL_ADMIN_USERNAME.")
+    return admin
+
+
 def seed() -> None:
     create_db_and_tables()
+    demo_mode = demo_seed_enabled()
     with Session(engine) as session:
         warehouse_1 = get_or_create(session, Warehouse, name="Warehouse 1", defaults={"address": "Main distribution depot", "manager": "Warehouse Manager 1"})
         warehouse_2 = get_or_create(session, Warehouse, name="Warehouse 2", defaults={"address": "Secondary distribution depot", "manager": "Warehouse Manager 2"})
 
-        admin = get_or_create(
-            session,
-            User,
-            username="admin",
-            defaults={
-                "name": "Owner Admin",
-                "phone": "03000000000",
-                "hashed_password": hash_password("admin123"),
-                "role": UserRole.OWNER,
-            },
-        )
-        booker_1 = get_or_create(
-            session,
-            User,
-            username="booker1",
-            defaults={
-                "name": "Booker 1",
-                "phone": "03000000001",
-                "hashed_password": hash_password("booker123"),
-                "role": UserRole.ORDER_BOOKER,
-                "assigned_warehouse_id": warehouse_1.id,
-            },
-        )
-        booker_2 = get_or_create(
-            session,
-            User,
-            username="booker2",
-            defaults={
-                "name": "Booker 2",
-                "phone": "03000000002",
-                "hashed_password": hash_password("booker123"),
-                "role": UserRole.ORDER_BOOKER,
-                "assigned_warehouse_id": warehouse_2.id,
-            },
-        )
+        if demo_mode:
+            admin, booker_1, booker_2 = _seed_demo_users(session, warehouse_1, warehouse_2)
+        else:
+            admin = _ensure_initial_admin(session)
+            booker_1 = session.exec(select(User).where(User.username == "booker1")).first()
+            booker_2 = session.exec(select(User).where(User.username == "booker2")).first()
 
         category = get_or_create(session, ProductCategory, name="Snacks")
         pack_cycle = cycle([12, 18, 20, 24, 26])
@@ -119,51 +195,55 @@ def seed() -> None:
                     session.flush()
                     seeded_skus.append(sku)
 
-        shops = [
-            Shop(
-                name="Al Madina Store",
-                owner_name="Rashid",
-                phone="03001234567",
-                area_route="Route A",
-                address="Main Market",
-                gps_latitude=31.5204,
-                gps_longitude=74.3587,
-                assigned_warehouse_id=warehouse_1.id,
-                assigned_order_booker_id=booker_1.id,
-                opening_balance=1500,
-                current_balance=1500,
-            ),
-            Shop(
-                name="City Super Mart",
-                owner_name="Kamran",
-                phone="03007654321",
-                area_route="Route B",
-                address="Commercial Area",
-                gps_latitude=31.4504,
-                gps_longitude=74.3001,
-                assigned_warehouse_id=warehouse_2.id,
-                assigned_order_booker_id=booker_2.id,
-                opening_balance=500,
-                current_balance=500,
-            ),
-        ]
-        for shop in shops:
-            existing = session.exec(select(Shop).where(Shop.name == shop.name)).first()
-            if not existing:
-                session.add(shop)
-        session.commit()
+        first_shop = None
+        if demo_mode and booker_1 and booker_2:
+            shops = [
+                Shop(
+                    name="Al Madina Store",
+                    owner_name="Rashid",
+                    phone="03001234567",
+                    area_route="Route A",
+                    address="Main Market",
+                    gps_latitude=31.5204,
+                    gps_longitude=74.3587,
+                    assigned_warehouse_id=warehouse_1.id,
+                    assigned_order_booker_id=booker_1.id,
+                    route_days=["Monday", "Wednesday", "Friday"],
+                    opening_balance=1500,
+                    current_balance=1500,
+                ),
+                Shop(
+                    name="City Super Mart",
+                    owner_name="Kamran",
+                    phone="03007654321",
+                    area_route="Route B",
+                    address="Commercial Area",
+                    gps_latitude=31.4504,
+                    gps_longitude=74.3001,
+                    assigned_warehouse_id=warehouse_2.id,
+                    assigned_order_booker_id=booker_2.id,
+                    route_days=["Tuesday", "Thursday", "Saturday"],
+                    opening_balance=500,
+                    current_balance=500,
+                ),
+            ]
+            for shop in shops:
+                existing = session.exec(select(Shop).where(Shop.name == shop.name)).first()
+                if not existing:
+                    session.add(shop)
+            session.commit()
 
-        first_shop = session.exec(select(Shop).where(Shop.name == "Al Madina Store")).first()
-        if first_shop and seeded_skus:
-            existing_rate = session.exec(select(ShopRateRule).where(ShopRateRule.shop_id == first_shop.id, ShopRateRule.sku_id == seeded_skus[0].id)).first()
-            if not existing_rate:
-                session.add(ShopRateRule(shop_id=first_shop.id, sku_id=seeded_skus[0].id, fixed_sale_rate=18, minimum_allowed_rate=16))
-                session.commit()
+            first_shop = session.exec(select(Shop).where(Shop.name == "Al Madina Store")).first()
+            if first_shop and seeded_skus:
+                existing_rate = session.exec(select(ShopRateRule).where(ShopRateRule.shop_id == first_shop.id, ShopRateRule.sku_id == seeded_skus[0].id)).first()
+                if not existing_rate:
+                    session.add(ShopRateRule(shop_id=first_shop.id, sku_id=seeded_skus[0].id, fixed_sale_rate=18, minimum_allowed_rate=16))
+                    session.commit()
 
         # Keep seed idempotent by checking whether inventory already exists through stock receipts.
         from app.models import StockReceipt
 
-        if not session.exec(select(StockReceipt)).first():
+        if demo_mode and admin and not session.exec(select(StockReceipt)).first():
             sample_items = [
                 StockReceiptItemCreate(sku_id=sku.id, quantity_received=8, quantity_unit="carton", pack_quantity=sku.pack_quantity, cost_per_packet=sku.cost_price)
                 for sku in seeded_skus[:12]
@@ -193,8 +273,7 @@ def seed() -> None:
                 admin,
             )
 
-        first_shop = session.exec(select(Shop).where(Shop.name == "Al Madina Store")).first()
-        if first_shop and seeded_skus and not session.exec(select(Sale)).first():
+        if demo_mode and first_shop and booker_1 and seeded_skus and not session.exec(select(Sale)).first():
             sample_sale = create_sale(
                 session,
                 SaleCreate(
@@ -208,14 +287,17 @@ def seed() -> None:
             )
             confirm_sale(session, sample_sale.id, booker_1)
 
-        if first_shop and not session.exec(select(Payment)).first():
+        if demo_mode and admin and first_shop and not session.exec(select(Payment)).first():
             create_payment(session, PaymentCreate(shop_id=first_shop.id, amount=100, method="cash", notes="Sample recovery payment"), admin)
 
-        if not session.exec(select(Expense)).first():
+        if demo_mode and admin and not session.exec(select(Expense)).first():
             session.add(Expense(category=ExpenseCategory.PETROL, amount=750, description="Sample petrol expense", warehouse_id=warehouse_1.id, created_by_id=admin.id))
             session.commit()
 
-        print("Seed complete: admin/admin123, booker1/booker123, booker2/booker123")
+        if demo_mode:
+            print("Demo seed complete: admin/admin123, booker1/booker123, booker2/booker123")
+        else:
+            print("Production-safe seed complete: demo passwords were not reset.")
 
 
 if __name__ == "__main__":

@@ -5,12 +5,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/AdminShell";
 import { DataTable } from "@/components/DataTable";
+import { WeekdayPicker } from "@/components/WeekdayPicker";
 import { apiFetch } from "@/lib/api";
 import { exportCsv, type CsvColumn } from "@/lib/csv";
 import type { AnyRow, ColumnConfig, FieldConfig, Option } from "@/lib/types";
+import { todayWeekday } from "@/lib/weekdays";
 
 function coerceValue(field: FieldConfig, value: any) {
   if (field.type === "checkbox") return Boolean(value);
+  if (field.type === "weekdays") return Array.isArray(value) ? value : [];
   if (value === "") return null;
   if (field.type === "number" || field.valueType === "number") return Number(value);
   return value;
@@ -37,6 +40,7 @@ export function ResourcePage({
   const [form, setForm] = useState<AnyRow>({});
   const [editing, setEditing] = useState<AnyRow | null>(null);
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"success" | "error">("error");
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<AnyRow[]>([]);
   const [options, setOptions] = useState<Record<string, Option[]>>({});
@@ -44,10 +48,15 @@ export function ResourcePage({
   const initialForm = useMemo(() => {
     const next: AnyRow = {};
     fields.forEach((field) => {
-      next[field.name] = field.type === "checkbox" ? true : "";
+      next[field.name] = field.type === "checkbox" ? true : field.type === "weekdays" ? [] : "";
     });
     return next;
   }, [fields]);
+
+  const showError = (text: string) => {
+    setMessageTone("error");
+    setMessage(text);
+  };
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -64,7 +73,7 @@ export function ResourcePage({
   }, [initialForm]);
 
   useEffect(() => {
-    loadRows().catch((error) => setMessage(error.message));
+    loadRows().catch((error) => showError(error.message));
   }, [loadRows]);
 
   useEffect(() => {
@@ -94,7 +103,8 @@ export function ResourcePage({
     setEditing(row);
     const next: AnyRow = {};
     fields.forEach((field) => {
-      next[field.name] = row[field.name] ?? (field.type === "checkbox" ? false : "");
+      if (field.type === "weekdays") next[field.name] = Array.isArray(row[field.name]) ? row[field.name] : [];
+      else next[field.name] = row[field.name] ?? (field.type === "checkbox" ? false : "");
     });
     setForm(next);
     setMessage("");
@@ -114,7 +124,7 @@ export function ResourcePage({
     const payload: AnyRow = {};
     for (const field of fields) {
       if ((field.required || (!editing && field.requiredOnCreate)) && (form[field.name] === "" || form[field.name] == null)) {
-        setMessage(`${field.label} is required`);
+        showError(`${field.label} is required`);
         return;
       }
       payload[field.name] = coerceValue(field, form[field.name]);
@@ -122,11 +132,13 @@ export function ResourcePage({
     try {
       const path = editing ? `${endpoint}/${editing.id}` : endpoint;
       await apiFetch(path, { method: editing ? "PUT" : "POST", body: payload });
-      setMessage(editing ? "Saved changes with audit history" : "Created");
+      const wasEditing = Boolean(editing);
       reset();
       await loadRows();
+      setMessageTone("success");
+      setMessage(wasEditing ? "Saved — changes recorded with audit history." : "Saved — new record added.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Save failed");
+      showError(error instanceof Error ? error.message : "Save failed");
     }
   };
 
@@ -187,7 +199,13 @@ export function ResourcePage({
                 return (
                   <label key={field.name} className="block">
                     <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">{field.label}</span>
-                    {field.type === "textarea" ? (
+                    {field.type === "weekdays" ? (
+                      <WeekdayPicker
+                        value={Array.isArray(form[field.name]) ? form[field.name] : []}
+                        today={todayWeekday()}
+                        onChange={(next) => setForm((current) => ({ ...current, [field.name]: next }))}
+                      />
+                    ) : field.type === "textarea" ? (
                       <textarea
                         className="field min-h-24"
                         value={form[field.name] ?? ""}
@@ -221,16 +239,28 @@ export function ResourcePage({
                       <input
                         type={field.type || "text"}
                         className="field"
+                        autoComplete={field.type === "password" ? "new-password" : undefined}
                         value={form[field.name] ?? ""}
-                        placeholder={field.placeholder}
+                        placeholder={field.type === "password" && editing ? "Leave blank to keep current password" : field.placeholder}
                         onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))}
                       />
+                    )}
+                    {field.type === "password" && editing && (
+                      <span className="mt-1 block text-xs text-slate-500">Type a new password here to reset it, or leave blank to keep the current one.</span>
                     )}
                   </label>
                 );
               })}
             </div>
-            {message && <div className="mt-3 rounded-md border border-orange-100 bg-orange-50 px-3 py-2 text-sm text-orange-800">{message}</div>}
+            {message && (
+              <div
+                className={`mt-3 rounded-md border px-3 py-2 text-sm ${
+                  messageTone === "success" ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-800"
+                }`}
+              >
+                {message}
+              </div>
+            )}
             <button type="submit" className="btn-primary mt-4 w-full">
               <Save size={18} /> Save
             </button>

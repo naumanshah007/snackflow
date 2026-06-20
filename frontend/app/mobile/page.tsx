@@ -22,6 +22,7 @@ export default function MobilePage() {
   const [shops, setShops] = useState<AnyRow[]>([]);
   const [skus, setSkus] = useState<AnyRow[]>([]);
   const [inventory, setInventory] = useState<AnyRow[]>([]);
+  const [todayRoute, setTodayRoute] = useState<AnyRow | null>(null);
   const [selectedShopId, setSelectedShopId] = useState("");
   const [search, setSearch] = useState("");
   const [lines, setLines] = useState<MobileLine[]>([{ ...blankLine }]);
@@ -45,6 +46,7 @@ export default function MobilePage() {
     setSkus(skuData);
     setInventory(invData);
     if (!selectedShopId && shopData[0]) setSelectedShopId(String(shopData[0].id));
+    apiFetch<AnyRow>("/my-route").then(setTodayRoute).catch(() => setTodayRoute(null));
   };
 
   useEffect(() => {
@@ -143,7 +145,7 @@ export default function MobilePage() {
     if (!selectedShop) return;
     setMessage("");
     try {
-      const sale = await apiFetch<AnyRow>("/sales", {
+      await apiFetch<AnyRow>("/sales", {
         method: "POST",
         body: {
           shop_id: selectedShop.id,
@@ -158,12 +160,11 @@ export default function MobilePage() {
           notes: notes || null
         }
       });
-      await apiFetch(`/sales/${sale.id}/confirm`, { method: "POST" });
       await apiFetch("/shop-visits", {
         method: "POST",
         body: { shop_id: selectedShop.id, status: "ORDER_TAKEN", gps_latitude: gps?.lat ?? null, gps_longitude: gps?.lng ?? null, notes }
       });
-      setMessage("Order delivered");
+      setMessage("Order booked");
       setLines([{ ...blankLine }]);
       setPayment("0");
       setNotes("");
@@ -298,6 +299,37 @@ export default function MobilePage() {
       <section key={tab} className="mx-auto max-w-3xl px-4 py-4" style={{ animation: "rise-in 0.28s ease both" }}>
         {tab === "shops" && (
           <div className="space-y-3">
+            {todayRoute && (
+              <div className="rounded-2xl border border-orange-200 bg-gradient-to-br from-orange-50 to-white p-4 shadow-premium">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-bold text-slate-950">
+                    <MapPin size={16} className="text-orange-600" /> Today&apos;s Route · {todayRoute.day}
+                  </div>
+                  <span className="rounded-full bg-orange-600 px-2.5 py-0.5 text-xs font-semibold text-white">{todayRoute.count} shops</span>
+                </div>
+                {Number(todayRoute.count) === 0 ? (
+                  <div className="mt-2 text-xs text-slate-500">No shops scheduled for {todayRoute.day}. Pick any shop below to take an order.</div>
+                ) : (
+                  <div className="mt-3 space-y-1.5">
+                    {(todayRoute.shops || []).map((shop: AnyRow) => (
+                      <button
+                        key={shop.id}
+                        onClick={() => setSelectedShopId(String(shop.id))}
+                        className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm transition ${
+                          String(shop.id) === selectedShopId ? "border-orange-400 bg-orange-100/70" : "border-orange-100 bg-white/80"
+                        }`}
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate font-semibold text-slate-900">{shop.name}</span>
+                          <span className="block truncate text-xs text-slate-500">{shop.area_route || shop.address || shop.phone || "No route"}</span>
+                        </span>
+                        <span className="shrink-0 text-xs font-bold text-amber-600">{money(shop.current_balance)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <button onClick={() => setTab("newshop")} className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-3 text-sm font-semibold text-white shadow-lift">
               <UserPlus size={18} /> Add new shop
             </button>
@@ -410,7 +442,7 @@ export default function MobilePage() {
               </div>
             </div>
             <button className="btn-primary w-full py-4 text-base">
-              <Save size={20} /> Save delivered order
+              <Save size={20} /> Book order
             </button>
           </form>
         )}

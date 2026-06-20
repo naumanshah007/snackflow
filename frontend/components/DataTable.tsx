@@ -7,20 +7,23 @@ import type { AnyRow, ColumnConfig } from "@/lib/types";
 export function DataTable({
   rows,
   columns,
-  empty = "No records found"
+  empty = "No records found",
+  maxHeight = "70vh"
 }: {
   rows: AnyRow[];
   columns: ColumnConfig[];
   empty?: ReactNode;
+  /** Caps the body height so the sticky header stays visible while scrolling. */
+  maxHeight?: string;
 }) {
   return (
     <div className="overflow-hidden rounded-xl border border-white/80 bg-white/95 shadow-premium backdrop-blur">
-      <div className="overflow-x-auto">
+      <div className="overflow-auto" style={{ maxHeight }}>
         <table className="min-w-full divide-y divide-slate-200/80 text-sm">
-          <thead className="bg-slate-950 text-left text-xs font-semibold uppercase text-slate-200">
+          <thead className="sticky top-0 z-10 bg-slate-950 text-left text-xs font-semibold uppercase text-slate-200 shadow-sm">
             <tr>
               {columns.map((column) => (
-                <th key={column.key} className="whitespace-nowrap px-4 py-3.5 first:pl-5 last:pr-5">
+                <th key={column.key} className="whitespace-nowrap bg-slate-950 px-4 py-3.5 first:pl-5 last:pr-5">
                   {column.label}
                 </th>
               ))}

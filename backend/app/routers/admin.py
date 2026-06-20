@@ -19,6 +19,9 @@ from app.models import (
     User,
     UserRole,
     Warehouse,
+    WEEKDAYS,
+    normalize_route_days,
+    today_weekday,
     utc_now,
 )
 from app.schemas import (
@@ -34,6 +37,7 @@ from app.schemas import (
     SKUCreate,
     SKUUpdate,
     UserCreate,
+    UserRead,
     UserUpdate,
     WarehouseCreate,
     WarehouseUpdate,
@@ -72,7 +76,7 @@ def _get_or_create_category(session: Session, category_name: str | None) -> Prod
     return category
 
 
-@router.get("/users")
+@router.get("/users", response_model=list[UserRead])
 def list_users(
     search: str | None = None,
     offset: int = 0,
@@ -86,7 +90,7 @@ def list_users(
     return session.exec(_paginate(query.order_by(User.id), offset, limit)).all()
 
 
-@router.post("/users")
+@router.post("/users", response_model=UserRead)
 def create_user(
     payload: UserCreate,
     current_user: User = Depends(require_roles(UserRole.OWNER)),
@@ -101,6 +105,7 @@ def create_user(
         hashed_password=hash_password(payload.password),
         role=payload.role,
         assigned_warehouse_id=payload.assigned_warehouse_id,
+        route_days=normalize_route_days(payload.route_days),
         is_active=payload.is_active,
     )
     session.add(user)
@@ -111,7 +116,7 @@ def create_user(
     return user
 
 
-@router.put("/users/{user_id}")
+@router.put("/users/{user_id}", response_model=UserRead)
 def update_user(
     user_id: int,
     payload: UserUpdate,
@@ -125,8 +130,14 @@ def update_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists")
     old = model_snapshot(user)
     data = payload.model_dump(exclude_unset=True)
-    if "password" in data and data["password"]:
-        user.hashed_password = hash_password(data.pop("password"))
+    # Always remove "password" from the field map: it maps to hashed_password, so
+    # setattr(user, "password", ...) would raise. A non-empty value resets the
+    # password; a blank/omitted value leaves the current password unchanged.
+    new_password = data.pop("password", None)
+    if new_password:
+        user.hashed_password = hash_password(new_password)
+    if "route_days" in data:
+        data["route_days"] = normalize_route_days(data["route_days"])
     for key, value in data.items():
         setattr(user, key, value)
     user.updated_at = utc_now()
@@ -353,6 +364,7 @@ def list_shops(
     warehouse_id: int | None = None,
     order_booker_id: int | None = None,
     status_filter: ShopStatus | None = None,
+    route_day: str | None = None,
     offset: int = 0,
     limit: int = Query(default=200, le=1000),
     current_user: User = Depends(get_current_user),
@@ -370,7 +382,87 @@ def list_shops(
         query = query.where(Shop.status == status_filter)
     if search:
         query = query.where(or_(Shop.name.ilike(f"%{search}%"), Shop.owner_name.ilike(f"%{search}%"), Shop.area_route.ilike(f"%{search}%")))
-    return session.exec(_paginate(query.order_by(Shop.name), offset, limit)).all()
+    shops = session.exec(_paginate(query.order_by(Shop.name), offset, limit)).all()
+    # route_days is a JSON column, so filter in Python for portable SQLite/Postgres behaviour.
+    if route_day:
+        wanted = route_day.strip().capitalize()
+        shops = [shop for shop in shops if wanted in (shop.route_days or [])]
+    return shops
+
+
+@router.get("/shops-by-route-day")
+def shops_by_route_day(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Group active shops by route day for a simple weekly route plan view.
+
+    Shops with no route days are surfaced under ``Unassigned`` so they are never
+    silently hidden from the plan.
+    """
+    query = select(Shop).where(Shop.is_active == True)  # noqa: E712
+    scoped = scoped_warehouse_id(current_user, None)
+    if scoped:
+        query = query.where(Shop.assigned_warehouse_id == scoped)
+    if current_user.role == UserRole.ORDER_BOOKER:
+        query = query.where(Shop.assigned_order_booker_id == current_user.id)
+    shops = session.exec(query.order_by(Shop.name)).all()
+
+    buckets: dict[str, list[dict]] = {day: [] for day in WEEKDAYS}
+    buckets["Unassigned"] = []
+    for shop in shops:
+        days = shop.route_days or []
+        entry = {
+            "id": shop.id,
+            "name": shop.name,
+            "area_route": shop.area_route,
+            "status": shop.status,
+            "assigned_order_booker_id": shop.assigned_order_booker_id,
+        }
+        if not days:
+            buckets["Unassigned"].append(entry)
+        for day in days:
+            if day in buckets:
+                buckets[day].append(entry)
+    return {
+        "today": today_weekday(),
+        "days": [{"day": day, "shops": buckets[day]} for day in WEEKDAYS] + [{"day": "Unassigned", "shops": buckets["Unassigned"]}],
+    }
+
+
+@router.get("/my-route")
+def my_route(
+    day: str | None = None,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Today's route for the current order booker: active assigned shops whose
+    route day matches today (or the requested ``day``)."""
+    target_day = (day or today_weekday()).strip().capitalize()
+    query = select(Shop).where(Shop.is_active == True, Shop.status == ShopStatus.ACTIVE)  # noqa: E712
+    if current_user.role == UserRole.ORDER_BOOKER:
+        query = query.where(Shop.assigned_order_booker_id == current_user.id)
+    shops = session.exec(query.order_by(Shop.name)).all()
+    route_shops = [shop for shop in shops if target_day in (shop.route_days or [])]
+    return {
+        "day": target_day,
+        "count": len(route_shops),
+        "shops": [
+            {
+                "id": shop.id,
+                "name": shop.name,
+                "owner_name": shop.owner_name,
+                "phone": shop.phone,
+                "area_route": shop.area_route,
+                "address": shop.address,
+                "current_balance": shop.current_balance,
+                "gps_latitude": shop.gps_latitude,
+                "gps_longitude": shop.gps_longitude,
+                "route_days": shop.route_days or [],
+            }
+            for shop in route_shops
+        ],
+    }
 
 
 @router.post("/shops")
@@ -382,6 +474,7 @@ def create_shop(
     if current_user.role not in {UserRole.OWNER, UserRole.ORDER_BOOKER}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     data = payload.model_dump()
+    data["route_days"] = normalize_route_days(data.get("route_days"))
     if current_user.role == UserRole.ORDER_BOOKER:
         # Order bookers can register new shops on their own route only. The shop
         # is scoped to their warehouse + themselves and waits for admin approval.
@@ -441,6 +534,8 @@ def update_shop(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Shop is outside your route")
         for protected in ("status", "assigned_warehouse_id", "assigned_order_booker_id"):
             data.pop(protected, None)
+    if "route_days" in data:
+        data["route_days"] = normalize_route_days(data["route_days"])
     old = model_snapshot(shop)
     for key, value in data.items():
         if hasattr(shop, key):

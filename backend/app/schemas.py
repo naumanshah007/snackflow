@@ -23,6 +23,7 @@ class UserCreate(BaseModel):
     phone: str | None = None
     role: UserRole = UserRole.ORDER_BOOKER
     assigned_warehouse_id: int | None = None
+    route_days: list[str] | None = None
     is_active: bool = True
 
 
@@ -33,6 +34,7 @@ class UserUpdate(BaseModel):
     phone: str | None = None
     role: UserRole | None = None
     assigned_warehouse_id: int | None = None
+    route_days: list[str] | None = None
     is_active: bool | None = None
 
 
@@ -43,6 +45,7 @@ class UserRead(BaseModel):
     phone: str | None
     role: UserRole
     assigned_warehouse_id: int | None
+    route_days: list[str] = []
     is_active: bool
     created_at: datetime
 
@@ -120,6 +123,7 @@ class ShopCreate(BaseModel):
     gps_longitude: float | None = None
     assigned_warehouse_id: int | None = None
     assigned_order_booker_id: int | None = None
+    route_days: list[str] | None = None
     credit_limit: float | None = None
     opening_balance: float = 0
     notes: str | None = None
@@ -137,6 +141,7 @@ class ShopUpdate(BaseModel):
     gps_longitude: float | None = None
     assigned_warehouse_id: int | None = None
     assigned_order_booker_id: int | None = None
+    route_days: list[str] | None = None
     credit_limit: float | None = None
     opening_balance: float | None = None
     notes: str | None = None
@@ -260,6 +265,21 @@ class ExpenseUpdate(BaseModel):
     warehouse_id: int | None = None
     order_booker_id: int | None = None
     description: str | None = None
+
+
+class MonthlyClosingMonthRequest(BaseModel):
+    month: str = Field(pattern=r"^\d{4}-\d{2}$")
+
+
+class MonthlyClosingCloseRequest(BaseModel):
+    month: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}$")
+    closing_id: int | None = None
+
+
+class MonthlyClosingArchiveRequest(BaseModel):
+    closing_id: int
+    confirm_downloaded_backup: bool = False
+    note: str | None = None
 
 
 class VisitCreate(BaseModel):

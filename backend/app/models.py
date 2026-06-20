@@ -19,6 +19,24 @@ class UserRole(str, Enum):
     ACCOUNTANT = "ACCOUNTANT"
 
 
+# Canonical weekday names used for shop route days and order-booker working days.
+WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+def today_weekday() -> str:
+    return date.today().strftime("%A")
+
+
+def normalize_route_days(values: Any) -> list[str]:
+    """Keep only valid weekday names, de-duplicated and ordered Mon..Sun."""
+    if not values:
+        return []
+    if isinstance(values, str):
+        values = [values]
+    cleaned = {str(v).strip().capitalize() for v in values}
+    return [day for day in WEEKDAYS if day in cleaned]
+
+
 class MovementType(str, Enum):
     STOCK_IN = "STOCK_IN"
     SALE_OUT = "SALE_OUT"
@@ -110,6 +128,8 @@ class User(SQLModel, table=True):
     hashed_password: str
     role: UserRole = Field(default=UserRole.ORDER_BOOKER)
     assigned_warehouse_id: int | None = Field(default=None, foreign_key="warehouses.id")
+    # Working/route days an order booker is in the field, e.g. ["Monday", "Thursday"].
+    route_days: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False, server_default="[]"))
     is_active: bool = True
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
@@ -160,6 +180,8 @@ class Shop(SQLModel, table=True):
     gps_longitude: float | None = None
     assigned_warehouse_id: int | None = Field(default=None, foreign_key="warehouses.id")
     assigned_order_booker_id: int | None = Field(default=None, foreign_key="users.id")
+    # Weekly route days this shop is visited on, e.g. ["Monday", "Thursday"].
+    route_days: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False, server_default="[]"))
     credit_limit: float | None = None
     opening_balance: float = 0
     current_balance: float = 0
@@ -389,3 +411,53 @@ class AuditLog(SQLModel, table=True):
     new_values: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON, nullable=True))
     ip_device: str | None = None
     created_at: datetime = Field(default_factory=utc_now, index=True)
+
+
+class MonthlyClosing(SQLModel, table=True):
+    __tablename__ = "monthly_closings"
+    __table_args__ = (UniqueConstraint("month_start", name="uq_monthly_closings_month_start"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    month_start: date = Field(index=True)
+    month_end: date = Field(index=True)
+    status: str = Field(default="BACKUP_PENDING", index=True, max_length=40)
+    closed_by_id: int | None = Field(default=None, foreign_key="users.id", index=True)
+    closed_at: datetime | None = Field(default=None, index=True)
+    backup_filename: str | None = Field(default=None, max_length=255)
+    backup_reference: str | None = None
+    backup_checksum: str | None = Field(default=None, max_length=64)
+    backup_generated_at: datetime | None = None
+    summary_totals: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False, server_default="{}"))
+    carry_forward_summary: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False, server_default="{}"))
+    archive_status: str = Field(default="NOT_ARCHIVED", index=True, max_length=40)
+    archive_requested_at: datetime | None = None
+    archived_at: datetime | None = None
+    archive_note: str | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class MonthlyShopOpeningBalance(SQLModel, table=True):
+    __tablename__ = "monthly_shop_opening_balances"
+    __table_args__ = (UniqueConstraint("monthly_closing_id", "shop_id", name="uq_monthly_shop_opening_closing_shop"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    monthly_closing_id: int = Field(foreign_key="monthly_closings.id", index=True)
+    month_start: date = Field(index=True)
+    shop_id: int = Field(foreign_key="shops.id", index=True)
+    opening_balance: float = 0
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class MonthlyInventoryOpeningBalance(SQLModel, table=True):
+    __tablename__ = "monthly_inventory_opening_balances"
+    __table_args__ = (UniqueConstraint("monthly_closing_id", "warehouse_id", "sku_id", name="uq_monthly_inventory_opening_closing_wh_sku"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    monthly_closing_id: int = Field(foreign_key="monthly_closings.id", index=True)
+    month_start: date = Field(index=True)
+    warehouse_id: int = Field(foreign_key="warehouses.id", index=True)
+    sku_id: int = Field(foreign_key="skus.id", index=True)
+    opening_quantity_packets: int = 0
+    opening_average_cost_per_packet: float = 0
+    created_at: datetime = Field(default_factory=utc_now)

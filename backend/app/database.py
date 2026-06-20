@@ -5,12 +5,13 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from app.config import settings
 
-connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
+database_url = settings.effective_database_url
+connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
 engine_kwargs = {}
-if settings.database_url == "sqlite://":
+if database_url == "sqlite://":
     engine_kwargs["poolclass"] = StaticPool
 
-engine = create_engine(settings.database_url, connect_args=connect_args, **engine_kwargs)
+engine = create_engine(database_url, connect_args=connect_args, **engine_kwargs)
 
 
 def create_db_and_tables() -> None:

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   Boxes,
+  CalendarCheck,
   ClipboardList,
   CreditCard,
   FileBarChart,
@@ -64,7 +65,10 @@ export const navGroups: { title: string | null; items: NavItem[] }[] = [
   },
   {
     title: "Reports",
-    items: [{ href: "/reports", label: "Reports", icon: FileBarChart }]
+    items: [
+      { href: "/reports", label: "Reports", icon: FileBarChart },
+      { href: "/monthly-closing", label: "Monthly Closing", icon: CalendarCheck }
+    ]
   },
   {
     title: "System",

@@ -31,7 +31,7 @@ The 2026-06-15 client feedback and the fixes applied are recorded in [`CLIENT_FE
 docker compose up --build
 ```
 
-The backend container runs migrations and the seed script automatically.
+The backend container runs migrations and the seed script automatically with `SNACKFLOW_DEMO_SEED=true` for local demo data.
 
 - Frontend: http://localhost:3000 or http://127.0.0.1:3000
 - API docs: http://localhost:8000/docs
@@ -43,6 +43,8 @@ Default seeded users:
 - Booker 1: `booker1` / `booker123`
 - Booker 2: `booker2` / `booker123`
 
+These credentials are for local/demo use only.
+
 ## Manual Backend Setup
 
 ```bash
@@ -52,11 +54,24 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 alembic upgrade head
-python -m app.seed
+SNACKFLOW_DEMO_SEED=true python -m app.seed
 uvicorn app.main:app --reload
 ```
 
 For quick local testing without Postgres, leave `DATABASE_URL` unset and the backend will use `sqlite:///./snackflow.db`.
+
+## Production Seed Safety
+
+The seed script does **not** reset existing user passwords unless demo seeding is explicitly enabled with `SNACKFLOW_DEMO_SEED=true` or `ENVIRONMENT=development`.
+
+Production setup rules:
+
+- Never enable `SNACKFLOW_DEMO_SEED` in production.
+- Never run demo seed reset against production data.
+- Keep `AUTO_SEED_DEMO=false` in production unless you intentionally want startup to run the production-safe seed path.
+- If production has no users, create the first owner admin by setting `INITIAL_ADMIN_USERNAME` and `INITIAL_ADMIN_PASSWORD` before running `python -m app.seed`.
+- Use a strong `INITIAL_ADMIN_PASSWORD`; do not use `admin123` or `booker123`.
+- If demo credentials were ever used during setup, change the admin password immediately from the app.
 
 ## Manual Frontend Setup
 
@@ -101,6 +116,7 @@ Admin:
 - `/payments`
 - `/expenses`
 - `/reports`
+- `/monthly-closing`
 - `/users`
 - `/settings`
 
@@ -117,7 +133,7 @@ pytest
 
 The included tests cover the highest-risk path: stock receipt, delivered sale stock deduction, shop ledger update, sale reversal, and payment posting.
 
-Current backend tests also cover carton-to-packet conversion, warehouse separation, insufficient stock, cancelled sales, partial returns, fixed/last sale rates, order-booker scope, expenses and profit reports, GPS storage, and item-sales reporting.
+Current backend tests also cover carton-to-packet conversion, warehouse separation, insufficient stock, cancelled sales, partial returns, fixed/last sale rates, order-booker scope, expenses and profit reports, GPS storage, item-sales reporting, seed safety, and monthly closing backup/carry-forward behavior.
 
 ## Manual and Audit Docs
 
@@ -148,6 +164,34 @@ python3 scripts/generate_manual_pdf.py
 ## Order Booker New Shops
 
 Order bookers can register new shops from the mobile app. Such shops are scoped automatically to the booker's assigned warehouse and the booker, and are created with status `PENDING_APPROVAL`. An admin/accountant approves (or rejects) via `POST /shops/{id}/approval`; approved shops become active. Admin-created shops are active immediately. The migration `0003_shop_status` adds the `status` column (defaults `ACTIVE`, so nothing existing is hidden).
+
+## Route Days (Weekly Route Planning)
+
+Each shop and each order booker can store **route days** (Monday–Sunday, multi-select):
+
+- **Admin** sets a shop's route days on the Shops page (route-day chips on the create/edit form) and an order booker's working days on the Users page.
+- The **Shops page** shows route-day chips on every shop card and a **Route day filter** to view "shops by route day"; shops with no route days show "No route days".
+- The **mobile order booker dashboard** shows a **Today's Route** card listing the booker's active shops whose route day matches today, with each shop's pending balance; tap a shop to select it for an order.
+- API: `GET /shops?route_day=Monday` filters, `GET /my-route?day=Monday` returns the current booker's route for a day (defaults to today), and `GET /shops-by-route-day` returns shops grouped by day (empty ones under `Unassigned`).
+- Storage: `Shop.route_days` and `User.route_days` are JSON lists. The migration `0004_route_days` adds both columns (default empty list, so nothing existing is hidden). Seed data ships sample route days for the demo bookers and shops.
+
+## Monthly Closing & Archive
+
+Monthly Closing helps Zaib Brothers stay within free-tier database limits without blindly deleting financial or stock history.
+
+Phase 1 is implemented:
+
+- Admin opens `/monthly-closing` and selects a month.
+- Preview shows total sales, payments received, expenses, gross profit, net profit, outstanding shop balance, warehouse-wise closing stock, and transaction counts.
+- Generate Backup creates a ZIP in memory and streams it immediately to the admin. The app stores the backup filename, SHA-256 checksum, and generated timestamp in `monthly_closings`, but it does not rely on Vercel/serverless local disk for permanent storage.
+- The ZIP contains CSV exports for sales, sale items, payments, expenses, shop ledger, stock ledger, stock receipts/items, current inventory balances, shops, SKUs, product/warehouse masters, users summary without password hashes, and monthly summary.
+- Download and save the ZIP immediately to laptop/Google Drive. Later download is regenerated from database rows for that month, so do not treat server local storage as a backup.
+- Close Month records a `monthly_closings` row and creates next-month opening balance rows in `monthly_shop_opening_balances` and `monthly_inventory_opening_balances`.
+- Archive/delete is Phase 2 and disabled by default with `MONTHLY_ARCHIVE_ENABLED=false`.
+
+Strong warning: **This action should only be done after downloading backup. It cannot be undone unless backup is restored.**
+
+Never blindly delete ledger history. In Phase 2, prefer archive tables or marked-as-archived rows over hard delete, and never remove users, warehouses, active shops, active SKUs/products, current inventory balances, current shop balances, monthly closing summaries, or related audit records.
 
 ## App vs Link, and Costs
 

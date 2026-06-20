@@ -10,7 +10,7 @@ export type AnyRow = Record<string, any>;
 export type FieldConfig = {
   name: string;
   label: string;
-  type?: "text" | "number" | "date" | "textarea" | "select" | "checkbox" | "password";
+  type?: "text" | "number" | "date" | "textarea" | "select" | "checkbox" | "password" | "weekdays";
   valueType?: "string" | "number" | "boolean";
   required?: boolean;
   requiredOnCreate?: boolean;
