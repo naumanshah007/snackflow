@@ -6,9 +6,9 @@ from sqlmodel import Session, or_, select
 from app.database import get_session
 from app.dependencies import assert_warehouse_scope, get_current_user, require_roles, scoped_warehouse_id
 from app.carton import carton_label, split_cartons
-from app.models import InventoryBalance, Product, SKU, StockLedger, StockReceipt, StockReceiptItem, User, UserRole, Warehouse
-from app.schemas import StockAdjustmentCreate, StockReceiptCreate
-from app.services.stock import adjust_stock, receive_stock
+from app.models import InventoryBalance, MovementType, Product, SKU, StockLedger, StockReceipt, StockReceiptItem, User, UserRole, Warehouse
+from app.schemas import StockAdjustmentCreate, StockReceiptCreate, SupplierReturnCreate
+from app.services.stock import adjust_stock, receive_stock, return_stock_to_supplier
 
 router = APIRouter(tags=["stock"])
 
@@ -157,3 +157,48 @@ def create_stock_adjustment(
 ):
     assert_warehouse_scope(current_user, payload.warehouse_id)
     return adjust_stock(session, payload, current_user)
+
+
+@router.post("/stock-returns")
+def create_supplier_return(
+    payload: SupplierReturnCreate,
+    current_user: User = Depends(require_roles(UserRole.OWNER, UserRole.WAREHOUSE_MANAGER)),
+    session: Session = Depends(get_session),
+):
+    """Record expired / damaged stock returned to the supplier (company)."""
+    assert_warehouse_scope(current_user, payload.warehouse_id)
+    return return_stock_to_supplier(session, payload, current_user)
+
+
+@router.get("/stock-returns")
+def list_supplier_returns(
+    warehouse_id: int | None = None,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Recent supplier returns, read from the stock ledger (carton-first)."""
+    query = select(StockLedger).where(StockLedger.movement_type == MovementType.SUPPLIER_RETURN_OUT)
+    scoped = scoped_warehouse_id(current_user, warehouse_id)
+    if scoped:
+        query = query.where(StockLedger.warehouse_id == scoped)
+    rows = session.exec(query.order_by(StockLedger.occurred_at.desc()).limit(500)).all()
+    result = []
+    for row in rows:
+        sku = session.get(SKU, row.sku_id)
+        product = session.get(Product, sku.product_id) if sku else None
+        warehouse = session.get(Warehouse, row.warehouse_id)
+        pack_quantity = sku.pack_quantity if sku else 1
+        returned_packets = abs(row.quantity_packets)
+        result.append(
+            {
+                "id": row.id,
+                "date": row.occurred_at,
+                "warehouse_name": warehouse.name if warehouse else "",
+                "sku_name": f"{product.name if product else ''} Rs {sku.size_mrp:g} {sku.flavour or ''}".strip() if sku else "",
+                "pack_quantity": pack_quantity,
+                "returned_packets": returned_packets,
+                "carton_label": carton_label(returned_packets, pack_quantity),
+                "notes": row.notes,
+            }
+        )
+    return result

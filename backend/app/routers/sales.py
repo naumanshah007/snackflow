@@ -7,8 +7,8 @@ from app.carton import carton_label, split_cartons
 from app.database import get_session
 from app.dependencies import get_current_user, scoped_warehouse_id
 from app.models import Payment, Product, SKU, Sale, SaleItem, SaleReturn, SaleReturnItem, SaleStatus, Shop, ShopVisit, User, UserRole, Warehouse
-from app.schemas import PaymentCreate, ReverseSaleRequest, SaleCreate, SaleReturnCreate, SaleUpdate, VisitCreate
-from app.services.payments import create_payment
+from app.schemas import PaymentCreate, PaymentVoidRequest, ReverseSaleRequest, SaleCreate, SaleReturnCreate, SaleUpdate, VisitCreate
+from app.services.payments import create_payment, void_payment
 from app.services.sales import cancel_sale, confirm_sale, create_sale, return_sale_items, reverse_sale
 from app.services.audit import model_snapshot, write_audit
 from app.models import utc_now
@@ -145,6 +145,19 @@ def post_payment(payload: PaymentCreate, current_user: User = Depends(get_curren
     return create_payment(session, payload, current_user)
 
 
+@router.post("/payments/{payment_id}/void")
+def void_payment_endpoint(
+    payment_id: int,
+    payload: PaymentVoidRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Void a wrongly-entered payment (admin/accountant). Re-enter the correct one after."""
+    if current_user.role not in {UserRole.OWNER, UserRole.ACCOUNTANT}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only an owner or accountant can void a payment")
+    return void_payment(session, payment_id, payload.reason, current_user)
+
+
 @router.get("/payments")
 def list_payments(
     shop_id: int | None = None,
@@ -187,12 +200,17 @@ def shop_collection_summary(shop_id: int, current_user: User = Depends(get_curre
     today_bill = round(sum(s.net_amount for s in today_sales), 2)
 
     today_payments = session.exec(
-        select(Payment).where(Payment.shop_id == shop_id, Payment.payment_date >= today_start, Payment.payment_date <= today_end)
+        select(Payment).where(
+            Payment.shop_id == shop_id,
+            Payment.payment_date >= today_start,
+            Payment.payment_date <= today_end,
+            Payment.is_voided == False,  # noqa: E712
+        )
     ).all()
     collected_today = round(sum(p.amount for p in today_payments), 2)
 
     last_payment = session.exec(
-        select(Payment).where(Payment.shop_id == shop_id).order_by(Payment.payment_date.desc())
+        select(Payment).where(Payment.shop_id == shop_id, Payment.is_voided == False).order_by(Payment.payment_date.desc())  # noqa: E712
     ).first()
 
     remaining_balance = round(shop.current_balance, 2)

@@ -12,7 +12,7 @@ from app.models import (
     utc_now,
 )
 from app.carton import carton_label
-from app.schemas import StockAdjustmentCreate, StockReceiptCreate
+from app.schemas import StockAdjustmentCreate, StockReceiptCreate, SupplierReturnCreate
 from app.services.audit import write_audit
 
 
@@ -179,6 +179,69 @@ def receive_stock(session: Session, payload: StockReceiptCreate, user: User) -> 
         f"{b['sku_name']} new balance: {b['carton_label']}" for b in balances
     )
     return data
+
+
+def return_stock_to_supplier(session: Session, payload: SupplierReturnCreate, user: User) -> dict:
+    """Record expired / damaged stock physically returned to the supplier.
+
+    This reduces warehouse inventory (carton-first input) and writes a
+    SUPPLIER_RETURN_OUT stock-ledger entry per line so the return is traceable.
+    """
+    if not payload.items:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A supplier return requires at least one item")
+
+    note = f"Returned to supplier{f' {payload.supplier_name}' if payload.supplier_name else ''} on {payload.date_returned}: {payload.reason}"
+    returned = []
+    for line in payload.items:
+        sku = session.get(SKU, line.sku_id)
+        if not sku:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"SKU {line.sku_id} not found")
+        pack_quantity = line.pack_quantity or sku.pack_quantity or 1
+        loose_packets = line.loose_packets or 0
+        if line.quantity_unit.lower() in {"carton", "bundle"}:
+            quantity_packets = line.quantity_received * pack_quantity + loose_packets
+        else:
+            quantity_packets = line.quantity_received
+        if quantity_packets <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Returned quantity must be positive")
+
+        balance = get_or_create_inventory(session, payload.warehouse_id, sku.id)
+        cost_rate = balance.average_cost_per_packet or sku.cost_price
+        # allow_negative stays False so a return can never exceed stock on hand.
+        result = apply_stock_movement(
+            session,
+            warehouse_id=payload.warehouse_id,
+            sku_id=sku.id,
+            quantity_packets=-quantity_packets,
+            movement_type=MovementType.SUPPLIER_RETURN_OUT,
+            reference_type="supplier_return",
+            reference_id=None,
+            cost_rate=cost_rate,
+            user=user,
+            notes=note,
+        )
+        returned.append(
+            {
+                "sku_id": sku.id,
+                "sku_name": f"Rs {sku.size_mrp:g} {sku.flavour or ''}".strip(),
+                "pack_quantity": sku.pack_quantity,
+                "returned_packets": quantity_packets,
+                "returned_label": carton_label(quantity_packets, sku.pack_quantity),
+                "total_packets": result.quantity_packets,
+                "carton_label": carton_label(result.quantity_packets, sku.pack_quantity),
+            }
+        )
+
+    write_audit(session, user, "SUPPLIER_RETURN", "inventory_balance", None, None, {"reason": payload.reason, "items": [r["sku_id"] for r in returned]})
+    session.commit()
+    return {
+        "warehouse_id": payload.warehouse_id,
+        "reason": payload.reason,
+        "supplier_name": payload.supplier_name,
+        "items": returned,
+        "message": "Expired/returned stock recorded and removed from inventory. "
+        + "; ".join(f"{r['sku_name']}: -{r['returned_label']} (now {r['carton_label']})" for r in returned),
+    }
 
 
 def adjust_stock(session: Session, payload: StockAdjustmentCreate, user: User) -> InventoryBalance:

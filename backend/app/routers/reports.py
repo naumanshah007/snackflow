@@ -349,7 +349,7 @@ def payment_recovery_report(
     session: Session = Depends(get_session),
 ):
     start, end = _range(date_from, date_to)
-    query = select(Payment).where(Payment.payment_date >= start, Payment.payment_date <= end)
+    query = select(Payment).where(Payment.payment_date >= start, Payment.payment_date <= end, Payment.is_voided == False)  # noqa: E712
     payments = session.exec(query.order_by(Payment.payment_date.desc())).all()
     scoped = scoped_warehouse_id(current_user, warehouse_id)
     rows = []

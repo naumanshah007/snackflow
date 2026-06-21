@@ -43,6 +43,8 @@ class MovementType(str, Enum):
     SALE_REVERSAL = "SALE_REVERSAL"
     RETURN_IN = "RETURN_IN"
     DAMAGE_OUT = "DAMAGE_OUT"
+    # Expired / damaged stock physically returned to the supplier (company).
+    SUPPLIER_RETURN_OUT = "SUPPLIER_RETURN_OUT"
     MANUAL_ADJUSTMENT_IN = "MANUAL_ADJUSTMENT_IN"
     MANUAL_ADJUSTMENT_OUT = "MANUAL_ADJUSTMENT_OUT"
     TRANSFER_OUT = "TRANSFER_OUT"
@@ -365,6 +367,11 @@ class Payment(SQLModel, table=True):
     method: str = Field(default="cash", max_length=60)
     reference_number: str | None = None
     notes: str | None = None
+    # A wrongly entered payment is voided (not deleted) so history is preserved.
+    is_voided: bool = Field(default=False, index=True)
+    voided_by_id: int | None = Field(default=None, foreign_key="users.id")
+    voided_at: datetime | None = None
+    void_reason: str | None = None
     created_by_id: int | None = Field(default=None, foreign_key="users.id")
     created_at: datetime = Field(default_factory=utc_now)
 

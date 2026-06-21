@@ -249,6 +249,36 @@ class PaymentCreate(BaseModel):
     notes: str | None = None
 
 
+class PaymentVoidRequest(BaseModel):
+    reason: str = Field(min_length=2)
+
+
+class SupplierReturnItemCreate(BaseModel):
+    sku_id: int
+    quantity_received: int = Field(gt=0)
+    quantity_unit: str = "carton"
+    loose_packets: int = Field(default=0, ge=0)
+    pack_quantity: int | None = Field(default=None, gt=0)
+
+
+class SupplierReturnCreate(BaseModel):
+    """Expired / damaged stock physically returned to the supplier (company)."""
+
+    warehouse_id: int
+    date_returned: date = Field(default_factory=date.today)
+    supplier_name: str | None = None
+    reason: str = Field(min_length=2)
+    items: list[SupplierReturnItemCreate]
+
+
+class ResetDataRequest(BaseModel):
+    # "transactions": clear sales/stock/payments/ledgers, keep all master data.
+    # "transactions_and_shops": the above plus shops and shop rate rules.
+    # "all": also clear products, SKUs, warehouses (keeps only login users).
+    scope: str = "transactions"
+    confirm: str
+
+
 class ExpenseCreate(BaseModel):
     expense_date: date = Field(default_factory=date.today)
     category: ExpenseCategory

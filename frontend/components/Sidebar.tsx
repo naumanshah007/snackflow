@@ -18,6 +18,7 @@ import {
   ShoppingCart,
   Store,
   Tags,
+  Undo2,
   Users,
   Warehouse
 } from "lucide-react";
@@ -37,6 +38,7 @@ export const navGroups: { title: string | null; items: NavItem[] }[] = [
       { href: "/distribution", label: "Control Center", icon: LayoutGrid },
       { href: "/inventory", label: "Inventory", icon: Boxes },
       { href: "/stock/receive", label: "Stock Receive", icon: ClipboardList },
+      { href: "/stock/returns", label: "Return to Supplier", icon: Undo2 },
       { href: "/stock/ledger", label: "Stock Ledger", icon: BarChart3 }
     ]
   },

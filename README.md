@@ -193,6 +193,24 @@ Strong warning: **This action should only be done after downloading backup. It c
 
 Never blindly delete ledger history. In Phase 2, prefer archive tables or marked-as-archived rows over hard delete, and never remove users, warehouses, active shops, active SKUs/products, current inventory balances, current shop balances, monthly closing summaries, or related audit records.
 
+## Returning Expired / Damaged Stock to the Supplier
+
+When items expire or are damaged and are sent back to the company/supplier, record it on **Distribution Control → Return to Supplier** (`/stock/returns`). Enter the warehouse, supplier, reason and the cartons being returned; the stock is removed from inventory and a `SUPPLIER_RETURN_OUT` entry is written to the stock ledger (also listed on the page and visible in the Stock Ledger). API: `POST /stock-returns` and `GET /stock-returns`. A return can never exceed the stock on hand.
+
+## Correcting a Wrong Payment
+
+If an order booker enters a payment with the wrong amount, an **owner or accountant** can fix it on the **Payments** page: click **Void / correct** on the payment, enter a reason, then post the correct payment. Voiding does not delete the record — it marks the payment voided and adds the amount back to the shop's balance via a correcting ledger entry, so history and the audit trail are preserved. Voided payments are excluded from collection summaries and recovery reports. API: `POST /payments/{id}/void`. Migration `0007_payment_void` adds the void metadata.
+
+## Start Fresh (Clearing Demo / Test Data)
+
+An **owner** can clear demo/test data from **Settings → Start fresh**. Choose a scope and type `RESET` to confirm:
+
+- **Transactions only** — clears sales, stock receipts, inventory, payments, ledgers, expenses and monthly closings; keeps products, SKUs, shops, warehouses and users; shop balances reset to their opening balance.
+- **Transactions + shops** — also removes shops and shop rate rules.
+- **Everything except logins** — full fresh start: also removes products, SKUs and warehouses, keeping only user accounts.
+
+Audit logs are preserved and a `RESET` audit entry is recorded. API: `POST /reset-data` (owner only, requires `confirm: "RESET"`).
+
 ## App vs Link, and Costs
 
 SnackFlow can run as a **web app through a secure link**. Order bookers can use it from a **mobile browser**, and it can be installed as a **PWA / mobile-app-style shortcut** (a `manifest.json` is included). A separate **Android / Play Store app** can be built later if required — it is optional future work.

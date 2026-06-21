@@ -31,9 +31,10 @@ Frontend Vercel env status from CLI:
 - Vercel CLI reports the backend deployment is ready at `https://snackflow-backend.vercel.app`.
 - `/health` returns HTTP 200 with `{"status":"ok"}`.
 - `/docs` returns HTTP 200.
-- CORS preflight from `https://snackflow-frontend.vercel.app` to `/auth/login` returns HTTP 200.
-- Observed CORS response is `access-control-allow-origin: *`. This works because the API uses bearer tokens and `allow_credentials=False`, but production should preferably restrict this to the frontend domain.
-- Login with the documented seeded admin credentials returned HTTP 200. This proves the frontend/backend path works, but it is a security blocker unless the live admin password has been changed immediately after setup.
+- CORS preflight from `https://snackflow-frontend.vercel.app` to `/auth/login` returns HTTP 200 and `access-control-allow-origin: https://snackflow-frontend.vercel.app`.
+- CORS preflight from an unapproved origin returns HTTP 400.
+- Login with the old documented seeded admin credentials `admin/admin123` returns HTTP 401.
+- Live admin login works with the final rotated password. The previous temporary audit password now returns HTTP 401. The final credential is not included in this report.
 
 Backend Vercel env status from CLI:
 
@@ -55,7 +56,24 @@ Backend deployment readiness:
 
 ## 3. Current Database Status
 
-The live backend has an encrypted production `DATABASE_URL` plus Neon/Postgres variables in Vercel. That strongly indicates the live database is Neon Postgres, not SQLite.
+The live backend is confirmed to be using Neon/Postgres, not SQLite.
+
+Sanitized runtime diagnostic evidence from the 2026-06-20 final pass:
+
+- Database dialect: `postgresql`.
+- Effective production database URL kind: Postgres.
+- `DATABASE_URL` no longer starts with SQLite at runtime.
+- `/tmp` SQLite is not in use.
+- Postgres env vars are populated at runtime.
+- Alembic revision: `0006_monthly_closing_checksum`.
+- `alembic_version` table is present.
+- Table count observed after migration: 25.
+- `AUTO_SEED_DEMO=false`.
+- `SNACKFLOW_DEMO_SEED=false/missing`.
+- `MONTHLY_ARCHIVE_ENABLED=false/missing`.
+- CORS origins: `https://snackflow-frontend.vercel.app`.
+
+Temporary maintenance diagnostics used to prove this were removed after verification and now return 404.
 
 Current code compatibility:
 
@@ -105,8 +123,8 @@ Recommended Rs 0/month MVP architecture:
 - Database: Neon free Postgres.
 - Frontend env: `NEXT_PUBLIC_API_URL=https://snackflow-backend.vercel.app`.
 - Backend env: `DATABASE_URL`, `JWT_SECRET`, `BACKEND_CORS_ORIGINS`, `AUTO_CREATE_TABLES`, `AUTO_SEED_DEMO`, `SNACKFLOW_DEMO_SEED`, `INITIAL_ADMIN_USERNAME`, `INITIAL_ADMIN_PASSWORD`, `MONTHLY_ARCHIVE_ENABLED`.
-- CORS: set `BACKEND_CORS_ORIGINS=https://snackflow-frontend.vercel.app` for production instead of `*`.
-- Migrations: run `alembic upgrade head` against the production `DATABASE_URL` during deployment or as a controlled manual step.
+- CORS: `BACKEND_CORS_ORIGINS=https://snackflow-frontend.vercel.app` is set for production.
+- Migrations: production is at Alembic head `0006_monthly_closing_checksum`; run `alembic upgrade head` against production during future schema changes.
 - Seeding: keep `SNACKFLOW_DEMO_SEED=false` in production. If production has no users, create the first admin only through `INITIAL_ADMIN_USERNAME` and `INITIAL_ADMIN_PASSWORD`.
 
 ## 6. Required Environment Variables
@@ -134,13 +152,12 @@ Do not expose backend `DATABASE_URL`, Postgres variables, JWT secret, or Vercel 
 
 Critical:
 
-- Live login accepted the documented default seeded admin credentials. Change the live admin password immediately and ensure production seeding does not reset it.
+- None open after the 2026-06-20 final pass.
 
 High:
 
-- Observed live CORS is `*`. It works technically, but production should restrict `BACKEND_CORS_ORIGINS` to `https://snackflow-frontend.vercel.app`.
-- Confirm that `AUTO_SEED_DEMO=false` and `SNACKFLOW_DEMO_SEED=false` in production. Demo password reset is now guarded by explicit demo/development settings.
-- Confirm migrations are run intentionally against production before model changes. `AUTO_CREATE_TABLES` can create tables but is not a substitute for controlled Alembic migrations.
+- Keep running controlled Alembic migrations for future schema changes. `AUTO_CREATE_TABLES=false` in production and should stay false.
+- Share the final rotated admin credential only through the chosen client handoff channel.
 
 Medium:
 

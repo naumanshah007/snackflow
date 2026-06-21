@@ -31,6 +31,7 @@ from app.schemas import (
     ProductUpdate,
     RateRuleCreate,
     RateRuleUpdate,
+    ResetDataRequest,
     ShopApprovalRequest,
     ShopCreate,
     ShopUpdate,
@@ -743,6 +744,21 @@ def delete_expense(
     write_audit(session, current_user, "VOID", "expense", expense.id, old, model_snapshot(expense))
     session.commit()
     return {"message": "Expense voided"}
+
+
+@router.post("/reset-data")
+def reset_data_endpoint(
+    payload: ResetDataRequest,
+    current_user: User = Depends(require_roles(UserRole.OWNER)),
+    session: Session = Depends(get_session),
+):
+    """Clear demo/test data so the owner can start fresh. Owner only; requires
+    an explicit ``confirm: "RESET"`` so it cannot fire accidentally."""
+    from app.services.maintenance import reset_data
+
+    if payload.confirm != "RESET":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Type RESET to confirm clearing data')
+    return reset_data(session, payload.scope, current_user)
 
 
 @router.get("/audit-logs")

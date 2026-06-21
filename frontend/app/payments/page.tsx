@@ -43,6 +43,23 @@ export default function PaymentsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const voidPayment = async (row: AnyRow) => {
+    const reason = window.prompt(`Void this payment of ${money(row.amount)}?\nThis adds the amount back to the shop's balance. Enter a reason:`);
+    if (reason == null) return;
+    if (reason.trim().length < 2) {
+      setMessage("A reason is required to void a payment");
+      return;
+    }
+    setMessage("");
+    try {
+      await apiFetch(`/payments/${row.id}/void`, { method: "POST", body: { reason: reason.trim() } });
+      setMessage(`Payment of ${money(row.amount)} voided. Now enter the correct payment if needed.`);
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not void payment");
+    }
+  };
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setMessage("");
@@ -124,9 +141,29 @@ export default function PaymentsPage() {
             columns={[
               { key: "payment_date", label: "Date/Time", render: (row) => new Date(row.payment_date).toLocaleString() },
               { key: "shop_id", label: "Shop", render: (row) => shopMap.get(String(row.shop_id))?.name ?? row.shop_id },
-              { key: "amount", label: "Amount", render: (row) => money(row.amount) },
+              { key: "amount", label: "Amount", render: (row) => (row.is_voided ? <span className="text-slate-400 line-through">{money(row.amount)}</span> : money(row.amount)) },
               { key: "method", label: "Method" },
-              { key: "reference_number", label: "Reference" }
+              { key: "reference_number", label: "Reference" },
+              {
+                key: "status",
+                label: "Status",
+                render: (row) =>
+                  row.is_voided ? (
+                    <span className="rounded bg-red-50 px-2 py-1 text-xs font-semibold text-red-700" title={row.void_reason || ""}>Voided</span>
+                  ) : (
+                    <span className="rounded bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">Posted</span>
+                  )
+              },
+              {
+                key: "actions",
+                label: "",
+                render: (row) =>
+                  row.is_voided ? null : (
+                    <button onClick={() => voidPayment(row)} className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">
+                      Void / correct
+                    </button>
+                  )
+              }
             ]}
           />
         </section>

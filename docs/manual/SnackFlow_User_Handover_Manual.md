@@ -406,3 +406,13 @@ Phase 1 does not delete old detailed rows. Archive/delete is disabled by default
 ## 25. 2026-06-15 Feedback Update
 
 This version applies the Zaib Brothers UAT feedback: carton-first inventory, stock, sales, mobile, SKU prices and reports; carton cost and carton sale price; stock receiving with date and new-balance confirmation; a working Distribution Control page; an Expenses tab; clear Reversal and Partial Return screens (open a sale and tap **View**); order bookers can add new shops (pending admin approval) and collect payments with the shop balance, today's bill, total payable, remaining balance, and last payment date shown. The full feedback log is in `CLIENT_FEEDBACK_2026_06_15.md`.
+
+## 26. 2026-06-21 Feedback Update
+
+Three more requests from the client retest were added:
+
+**Return expired / damaged stock to the company.** Go to **Distribution Control → Return to Supplier**. Pick the warehouse and supplier, write the reason (e.g. expired), and enter the cartons returned. The stock is removed from inventory and listed under "Recent returns to supplier" and the Stock Ledger. You cannot return more than the stock on hand.
+
+**Correct a wrongly-entered payment.** On the **Payments** page, an owner or accountant clicks **Void / correct** next to the payment, types a reason, then enters the correct payment. The wrong payment is not deleted — it is marked **Voided**, its amount is added back to the shop's balance, and it stops counting in collection and recovery reports. History is preserved.
+
+**Start fresh (clear demo/test data).** An owner opens **Settings → Start fresh**, picks how much to clear (transactions only / transactions + shops / everything except logins), and types `RESET` to confirm. This removes the sample/test sales, stock and profit so you can begin entering real data. It cannot be undone, so use it only before going live.
