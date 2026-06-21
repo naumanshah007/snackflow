@@ -27,7 +27,7 @@ export default function LoginPage() {
     formState: { errors, isSubmitting }
   } = useForm<LoginForm>({
     resolver: zodResolver(schema),
-    defaultValues: { username: "admin", password: "admin123" }
+    defaultValues: { username: "", password: "" }
   });
 
   const submit = async (values: LoginForm) => {
@@ -88,7 +88,7 @@ export default function LoginPage() {
             </div>
             <div className="mt-6 inline-flex rounded-full border border-orange-100 bg-orange-50 px-3 py-1 text-xs font-semibold uppercase text-orange-700">Secure access</div>
             <h2 className="mt-3 text-3xl font-bold text-slate-950">Sign in</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">Use admin/admin123 after running the seed script.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-500">Enter your username and password to continue.</p>
           </div>
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-700">Username</span>

@@ -16,8 +16,8 @@ const blankShop = { name: "", owner_name: "", phone: "", area_route: "", address
 
 export default function MobilePage() {
   const [authed, setAuthed] = useState(false);
-  const [username, setUsername] = useState("booker1");
-  const [password, setPassword] = useState("booker123");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [tab, setTab] = useState<Tab>("shops");
   const [shops, setShops] = useState<AnyRow[]>([]);
   const [skus, setSkus] = useState<AnyRow[]>([]);
