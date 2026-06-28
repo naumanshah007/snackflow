@@ -123,3 +123,44 @@ All checked authenticated backend routes returned expected success:
 ## Remaining Required Action
 
 The admin password was rotated once more after this audit because the previous temporary audit password was visible in chat. Do not share credentials from this report; provide the final rotated credential only through the chosen handoff channel.
+
+## 2026-06-28 Live Feedback Fix Audit
+
+Status: implemented locally, pending live deployment/verification.
+
+No secret values are included in this report. No production data was reset or deleted.
+
+Client feedback addressed:
+
+- Owner/admin lockout needs a safe maintainer recovery process.
+- Admin needs a visible way to approve order-booker-created pending shops.
+- Order bookers must not see Ledger / Control Center / admin tabs on mobile.
+- Order bookers must not see cost, stock value, COGS, gross profit, net profit, or internal accounting data.
+
+Implemented source changes:
+
+- Added `backend/scripts/reset_owner_password.py`, an env-var-only owner recovery script that requires `DATABASE_URL`, `RESET_OWNER_USERNAME`, and `RESET_OWNER_PASSWORD`, updates only an existing owner by default, does not print the password, and writes an audit row.
+- Added `docs/ops/PASSWORD_RECOVERY.md`.
+- Updated Users page help text and success messaging for admin password resets.
+- Added Shops page status filters, pending count click-through, `PENDING APPROVAL` badges, assignment details, map/GPS visibility, and Approve / Reject actions.
+- Blocked sales and payment collection on pending shops until approval.
+- Added role-filtered navigation and order-booker redirect to `/mobile`.
+- Added backend blocks for order bookers on reports, stock ledger, monthly closing, expenses, users, reset-data, supplier returns, and internal shop ledger.
+- Added backend redaction for order-booker inventory, SKU, sales, and mobile-safe responses.
+- Improved Settings password change UX with current/new/confirm fields, show/hide toggles, validation, and clear success text.
+
+Local verification added:
+
+- Order-booker endpoint blocking tests.
+- Order-booker cost/profit redaction tests.
+- Owner cost/profit visibility regression test.
+- Pending shop approval workflow tests.
+- Blank password update preservation test.
+
+Live verification must still confirm after deployment:
+
+- Owner can log in after private recovery, then rotate the temporary password in Settings.
+- Owner can reset an order booker password from Users.
+- Admin can approve pending shops from Shops → Pending Approval.
+- Order booker is redirected to `/mobile` and cannot access `/reports`, `/distribution`, `/stock/ledger`, `/monthly-closing`, `/settings`, `/users`, `/expenses`, or reset-data.
+- Order-booker mobile and API responses contain no cost/profit/internal accounting fields.

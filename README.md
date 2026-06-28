@@ -15,7 +15,7 @@ cost_per_carton      = cost_per_packet      * pack_quantity
 sale_rate_per_carton = sale_rate_per_packet * pack_quantity
 ```
 
-The 2026-06-15 client feedback and the fixes applied are recorded in [`CLIENT_FEEDBACK_2026_06_15.md`](CLIENT_FEEDBACK_2026_06_15.md).
+The 2026-06-15 client feedback and the fixes applied are recorded in [`CLIENT_FEEDBACK_2026_06_15.md`](CLIENT_FEEDBACK_2026_06_15.md). The 2026-06-28 live security/UX feedback is recorded in [`CLIENT_FEEDBACK_2026_06_28.md`](CLIENT_FEEDBACK_2026_06_28.md).
 
 ## Stack
 
@@ -58,7 +58,30 @@ SNACKFLOW_DEMO_SEED=true python -m app.seed
 uvicorn app.main:app --reload
 ```
 
-For quick local testing without Postgres, leave `DATABASE_URL` unset and the backend will use `sqlite:///./snackflow.db`.
+For quick local testing without Postgres, set `ENVIRONMENT=development`, leave `DATABASE_URL` unset, and the backend will use `sqlite:///./snackflow.db`.
+
+## Production Database & Migrations
+
+Production must use a persistent PostgreSQL database. Do not run SnackFlow on Vercel with the SQLite fallback; serverless local files are ephemeral and can make data appear to reset.
+
+Set the backend Vercel project environment to a real Postgres connection string using one of these variable names:
+
+- `POSTGRES_URL`
+- `POSTGRES_URL_NON_POOLING`
+- `DATABASE_URL_UNPOOLED`
+- `DATABASE_URL`
+
+`POSTGRES_URL` is preferred. The value should be a full `postgresql://...` or `postgres://...` connection string from the Postgres provider. Keep `ENVIRONMENT=production` and `AUTO_CREATE_TABLES=false` in production.
+
+Run migrations before using a new production deployment:
+
+```bash
+cd backend
+source .venv/bin/activate
+python scripts/migrate.py
+```
+
+This runs `alembic upgrade head` against the configured database. `SQLModel.metadata.create_all` is only a local/fresh-database convenience; production schema changes should come from Alembic migrations.
 
 ## Production Seed Safety
 
@@ -72,6 +95,12 @@ Production setup rules:
 - If production has no users, create the first owner admin by setting `INITIAL_ADMIN_USERNAME` and `INITIAL_ADMIN_PASSWORD` before running `python -m app.seed`.
 - Use a strong `INITIAL_ADMIN_PASSWORD`; do not use `admin123` or `booker123`.
 - If demo credentials were ever used during setup, change the admin password immediately from the app.
+
+## Password Recovery
+
+Logged-in owners reset order booker passwords from `/users`. Leave the password field blank to keep the existing password; enter a new password only when a reset is intended.
+
+If the owner is locked out, use the maintainer-only recovery process in [`docs/ops/PASSWORD_RECOVERY.md`](docs/ops/PASSWORD_RECOVERY.md). It runs `backend/scripts/reset_owner_password.py` with `DATABASE_URL`, `RESET_OWNER_USERNAME`, and `RESET_OWNER_PASSWORD`, updates only the selected owner account by default, writes an audit row, and never prints the password.
 
 ## Manual Frontend Setup
 
@@ -97,6 +126,8 @@ npm run dev
 - SKU and shop rate edits write audit logs visible in the UI.
 - Expenses reduce net profit but not gross profit.
 - Order bookers are scoped to their assigned warehouse and shops.
+- Order bookers cannot access reports, stock ledger, monthly closing, expenses, users, reset-data, supplier returns, or internal shop ledger endpoints.
+- Order booker API responses redact cost, stock value, COGS, gross profit, net profit, and line-profit fields.
 
 ## Main Routes
 
@@ -163,7 +194,7 @@ python3 scripts/generate_manual_pdf.py
 
 ## Order Booker New Shops
 
-Order bookers can register new shops from the mobile app. Such shops are scoped automatically to the booker's assigned warehouse and the booker, and are created with status `PENDING_APPROVAL`. An admin/accountant approves (or rejects) via `POST /shops/{id}/approval`; approved shops become active. Admin-created shops are active immediately. The migration `0003_shop_status` adds the `status` column (defaults `ACTIVE`, so nothing existing is hidden).
+Order bookers can register new shops from the mobile app. Such shops are scoped automatically to the booker's assigned warehouse and the booker, and are created with status `PENDING_APPROVAL`. The Shops page has All / Active / Pending Approval / Rejected filters, a visible pending count, and Approve / Reject buttons on pending shop cards. An admin/accountant approves (or rejects) via `POST /shops/{id}/approval`; approved shops become active. Pending shops cannot be used for sales or payment collection until approved. Admin-created shops are active immediately. The migration `0003_shop_status` adds the `status` column (defaults `ACTIVE`, so nothing existing is hidden).
 
 ## Route Days (Weekly Route Planning)
 

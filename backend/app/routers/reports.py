@@ -1,6 +1,6 @@
 from datetime import date, datetime, time, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlmodel import Session, select
 
@@ -12,6 +12,12 @@ from app.models import Expense, InventoryBalance, Payment, Product, SKU, Sale, S
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 RECOGNIZED_SALE_STATUSES = (SaleStatus.DELIVERED, SaleStatus.CONFIRMED, SaleStatus.PARTIALLY_RETURNED)
+REPORT_ROLES = {UserRole.OWNER, UserRole.ACCOUNTANT}
+
+
+def _ensure_report_access(user: User) -> None:
+    if user.role not in REPORT_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
 
 
 def _range(date_from: date | None, date_to: date | None) -> tuple[datetime, datetime]:
@@ -52,6 +58,7 @@ def dashboard(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    _ensure_report_access(current_user)
     start, end = _range(date_from, date_to)
     sale_query = _recognized_sale_filter(select(Sale).where(Sale.sale_date >= start, Sale.sale_date <= end))
     sales = session.exec(_apply_sale_filters(sale_query, current_user, warehouse_id, order_booker_id)).all()
@@ -146,6 +153,7 @@ def daily_sales(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    _ensure_report_access(current_user)
     start, end = _range(date_from, date_to)
     query = _recognized_sale_filter(select(Sale).where(Sale.sale_date >= start, Sale.sale_date <= end))
     sales = session.exec(_apply_sale_filters(query, current_user, warehouse_id, None).order_by(Sale.sale_date.desc())).all()
@@ -173,6 +181,7 @@ def item_sales(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    _ensure_report_access(current_user)
     start, end = _range(date_from, date_to)
     sales = session.exec(
         _apply_sale_filters(_recognized_sale_filter(select(Sale).where(Sale.sale_date >= start, Sale.sale_date <= end)), current_user, warehouse_id, None)
@@ -216,6 +225,7 @@ def shop_balances(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    _ensure_report_access(current_user)
     query = select(Shop)
     scoped = scoped_warehouse_id(current_user, warehouse_id)
     if scoped:
@@ -244,6 +254,7 @@ def order_booker_report(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    _ensure_report_access(current_user)
     start, end = _range(date_from, date_to)
     sales = session.exec(
         _apply_sale_filters(_recognized_sale_filter(select(Sale).where(Sale.sale_date >= start, Sale.sale_date <= end)), current_user, warehouse_id, None)
@@ -266,6 +277,7 @@ def shop_sales_report(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    _ensure_report_access(current_user)
     start, end = _range(date_from, date_to)
     sales = session.exec(
         _apply_sale_filters(_recognized_sale_filter(select(Sale).where(Sale.sale_date >= start, Sale.sale_date <= end)), current_user, warehouse_id, None)
@@ -287,6 +299,7 @@ def shop_sales_report(
 
 @router.get("/inventory")
 def inventory_report(current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    _ensure_report_access(current_user)
     from app.routers.stock import get_inventory
 
     return get_inventory(limit=1000, current_user=current_user, session=session)
@@ -300,6 +313,7 @@ def profit_report(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    _ensure_report_access(current_user)
     start, end = _range(date_from, date_to)
     sales = session.exec(
         _apply_sale_filters(_recognized_sale_filter(select(Sale).where(Sale.sale_date >= start, Sale.sale_date <= end)), current_user, warehouse_id, None)
@@ -331,6 +345,7 @@ def expense_report(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    _ensure_report_access(current_user)
     start, end = _range(date_from, date_to)
     rows = session.exec(
         select(Expense.category, func.sum(Expense.amount))
@@ -348,6 +363,7 @@ def payment_recovery_report(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    _ensure_report_access(current_user)
     start, end = _range(date_from, date_to)
     query = select(Payment).where(Payment.payment_date >= start, Payment.payment_date <= end, Payment.is_voided == False)  # noqa: E712
     payments = session.exec(query.order_by(Payment.payment_date.desc())).all()
@@ -383,6 +399,7 @@ def shop_visit_report(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    _ensure_report_access(current_user)
     start, end = _range(date_from, date_to)
     visits = session.exec(select(ShopVisit).where(ShopVisit.visited_at >= start, ShopVisit.visited_at <= end).order_by(ShopVisit.visited_at.desc())).all()
     scoped = scoped_warehouse_id(current_user, warehouse_id)
@@ -413,6 +430,7 @@ def shop_visit_report(
 
 @router.get("/low-stock")
 def low_stock_report(current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    _ensure_report_access(current_user)
     from app.routers.stock import get_inventory
 
     return get_inventory(low_stock_only=True, limit=1000, current_user=current_user, session=session)

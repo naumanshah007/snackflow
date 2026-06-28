@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, LocateFixed, MapPin, Pencil, Plus, RefreshCcw, Save, Search, Store, Users, Warehouse } from "lucide-react";
+import { CheckCircle2, ExternalLink, LocateFixed, MapPin, Pencil, Plus, RefreshCcw, Save, Search, Store, Users, Warehouse, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "@/components/AdminShell";
@@ -47,9 +47,18 @@ const blankForm: ShopForm = {
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   ACTIVE: { label: "Active", className: "bg-green-50 text-green-700" },
-  PENDING_APPROVAL: { label: "Pending approval", className: "bg-orange-50 text-orange-700" },
+  PENDING_APPROVAL: { label: "PENDING APPROVAL", className: "bg-orange-100 text-orange-800" },
   REJECTED: { label: "Rejected", className: "bg-red-50 text-red-700" }
 };
+
+const STATUS_FILTERS = [
+  { key: "ALL", label: "All Shops" },
+  { key: "ACTIVE", label: "Active" },
+  { key: "PENDING_APPROVAL", label: "Pending Approval" },
+  { key: "REJECTED", label: "Rejected / Inactive" }
+] as const;
+
+type StatusFilter = (typeof STATUS_FILTERS)[number]["key"];
 
 function statusBadge(shop: AnyRow) {
   const status = String(shop.status || (shop.is_active ? "ACTIVE" : "")).toUpperCase();
@@ -73,6 +82,7 @@ export default function ShopsPage() {
   const [editingShop, setEditingShop] = useState<AnyRow | null>(null);
   const [search, setSearch] = useState("");
   const [routeDayFilter, setRouteDayFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState<"success" | "error">("error");
   const [loading, setLoading] = useState(false);
@@ -87,14 +97,21 @@ export default function ShopsPage() {
   };
 
   const orderBookers = users.filter((user) => user.role === "ORDER_BOOKER");
+  const warehouseById = useMemo(() => new Map(warehouses.map((warehouse) => [String(warehouse.id), warehouse])), [warehouses]);
+  const userById = useMemo(() => new Map(users.map((user) => [String(user.id), user])), [users]);
   const filteredShops = useMemo(() => {
     const term = search.toLowerCase().trim();
     return shops.filter((shop) => {
       const matchesTerm = !term || `${shop.name} ${shop.owner_name || ""} ${shop.phone || ""} ${shop.area_route || ""} ${shop.address || ""}`.toLowerCase().includes(term);
       const matchesDay = !routeDayFilter || (Array.isArray(shop.route_days) && shop.route_days.includes(routeDayFilter));
-      return matchesTerm && matchesDay;
+      const status = String(shop.status || (shop.is_active ? "ACTIVE" : "REJECTED")).toUpperCase();
+      const matchesStatus =
+        statusFilter === "ALL" ||
+        status === statusFilter ||
+        (statusFilter === "REJECTED" && (!shop.is_active || status === "REJECTED"));
+      return matchesTerm && matchesDay && matchesStatus;
     });
-  }, [search, routeDayFilter, shops]);
+  }, [search, routeDayFilter, statusFilter, shops]);
 
   const stats = useMemo(() => {
     const active = shops.filter((shop) => (shop.status ? shop.status === "ACTIVE" : shop.is_active)).length;
@@ -217,6 +234,32 @@ export default function ShopsPage() {
     }
   };
 
+  const approveShop = async (shop: AnyRow) => {
+    setMessage("");
+    try {
+      await apiFetch(`/shops/${shop.id}/approval`, { method: "POST", body: { status: "ACTIVE" } });
+      await load();
+      setStatusFilter("PENDING_APPROVAL");
+      showSuccess("Shop approved and is now active.");
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Approval failed");
+    }
+  };
+
+  const rejectShop = async (shop: AnyRow) => {
+    const reason = window.prompt("Reason for rejecting this shop?");
+    if (reason === null) return;
+    setMessage("");
+    try {
+      await apiFetch(`/shops/${shop.id}/approval`, { method: "POST", body: { status: "REJECTED", notes: reason.trim() || "Rejected by admin" } });
+      await load();
+      setStatusFilter("PENDING_APPROVAL");
+      showSuccess("Shop rejected.");
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Reject failed");
+    }
+  };
+
   const selectedMapUrl = form.gps_latitude && form.gps_longitude ? `https://www.google.com/maps?q=${form.gps_latitude},${form.gps_longitude}` : "";
 
   return (
@@ -241,11 +284,15 @@ export default function ShopsPage() {
               <div className="mt-3 text-2xl font-bold">{stats.active}</div>
               <div className="mt-1 text-xs text-slate-300">Active shops</div>
             </div>
-            <div className="rounded-lg border border-white/10 bg-white/10 p-4">
+            <button
+              type="button"
+              onClick={() => setStatusFilter("PENDING_APPROVAL")}
+              className="rounded-lg border border-white/10 bg-white/10 p-4 text-left transition hover:bg-white/15"
+            >
               <Store size={18} className="text-amber-200" />
               <div className="mt-3 text-2xl font-bold">{stats.pending}</div>
               <div className="mt-1 text-xs text-slate-300">Pending approval</div>
-            </div>
+            </button>
             <div className="rounded-lg border border-white/10 bg-white/10 p-4">
               <Users size={18} className="text-sky-200" />
               <div className="mt-3 text-2xl font-bold">{money(stats.balance)}</div>
@@ -276,9 +323,30 @@ export default function ShopsPage() {
             </label>
           </div>
 
+          <div className="surface-band p-3">
+            <p className="mb-3 text-sm text-slate-500">Shops added by order booker appear as Pending Approval. Admin must approve them before regular use.</p>
+            <div className="flex flex-wrap gap-2">
+              {STATUS_FILTERS.map((filter) => (
+                <button
+                  key={filter.key}
+                  type="button"
+                  onClick={() => setStatusFilter(filter.key)}
+                  className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+                    statusFilter === filter.key ? "bg-slate-950 text-white shadow-lift" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="grid gap-3 lg:grid-cols-2">
             {filteredShops.map((shop) => {
               const hasGps = Boolean(shop.gps_latitude && shop.gps_longitude);
+              const isPending = shop.status === "PENDING_APPROVAL";
+              const warehouseName = warehouseById.get(String(shop.assigned_warehouse_id))?.name || (shop.assigned_warehouse_id ? `Warehouse #${shop.assigned_warehouse_id}` : "No warehouse");
+              const bookerName = userById.get(String(shop.assigned_order_booker_id))?.name || (shop.assigned_order_booker_id ? `User #${shop.assigned_order_booker_id}` : "No order booker");
               return (
                 <article key={shop.id} className="premium-panel p-4 transition hover:-translate-y-0.5">
                   <div className="flex items-start justify-between gap-3">
@@ -308,6 +376,17 @@ export default function ShopsPage() {
                     </button>
                   </div>
 
+                  <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+                    <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
+                      <div className="text-xs text-slate-500">Assigned order booker</div>
+                      <div className="mt-0.5 font-semibold text-slate-900">{bookerName}</div>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
+                      <div className="text-xs text-slate-500">Assigned warehouse</div>
+                      <div className="mt-0.5 font-semibold text-slate-900">{warehouseName}</div>
+                    </div>
+                  </div>
+
                   <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                     <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                       <div className="text-xs text-slate-500">Balance</div>
@@ -330,6 +409,16 @@ export default function ShopsPage() {
                       </a>
                     )}
                   </div>
+                  {isPending && (
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <button type="button" onClick={() => approveShop(shop)} className="inline-flex items-center justify-center gap-2 rounded-md bg-green-600 px-3 py-2.5 text-sm font-semibold text-white shadow-lift hover:bg-green-700">
+                        <CheckCircle2 size={16} /> Approve
+                      </button>
+                      <button type="button" onClick={() => rejectShop(shop)} className="inline-flex items-center justify-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100">
+                        <XCircle size={16} /> Reject
+                      </button>
+                    </div>
+                  )}
                 </article>
               );
             })}

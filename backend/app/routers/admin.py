@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session, or_, select
 
 from app.database import get_session
-from app.dependencies import get_current_user, require_roles, scoped_warehouse_id, username_exists
+from app.dependencies import forbid_order_booker, get_current_user, require_roles, scoped_warehouse_id, username_exists
 from app.models import (
     AuditLog,
     Expense,
@@ -135,6 +135,8 @@ def update_user(
     # setattr(user, "password", ...) would raise. A non-empty value resets the
     # password; a blank/omitted value leaves the current password unchanged.
     new_password = data.pop("password", None)
+    if isinstance(new_password, str):
+        new_password = new_password.strip()
     if new_password:
         user.hashed_password = hash_password(new_password)
     if "route_days" in data:
@@ -289,6 +291,7 @@ def list_skus(
     _: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    current_user = _
     query = select(SKU)
     if product_id:
         query = query.where(SKU.product_id == product_id)
@@ -307,6 +310,9 @@ def list_skus(
         data["cost_per_carton"] = round(sku.cost_price * pack, 2)
         data["default_sale_rate_per_carton"] = round(sku.default_sale_rate * pack, 2)
         data["minimum_sale_rate_per_carton"] = round(sku.minimum_sale_rate * pack, 2)
+        if current_user.role == UserRole.ORDER_BOOKER:
+            for internal_key in ("cost_price", "cost_per_carton", "minimum_sale_rate", "minimum_sale_rate_per_carton"):
+                data.pop(internal_key, None)
         result.append(data)
     return result
 
@@ -349,7 +355,7 @@ def update_sku(
 @router.get("/skus/{sku_id}/history")
 def sku_history(
     sku_id: int,
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_roles(UserRole.OWNER, UserRole.ACCOUNTANT)),
     session: Session = Depends(get_session),
 ):
     return session.exec(
@@ -574,16 +580,20 @@ def set_shop_approval(
 @router.get("/shops/{shop_id}/ledger")
 def shop_ledger(
     shop_id: int,
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    forbid_order_booker(current_user)
     return session.exec(select(ShopLedger).where(ShopLedger.shop_id == shop_id).order_by(ShopLedger.occurred_at.desc())).all()
 
 
 @router.get("/shops/{shop_id}/last-rates")
-def shop_last_rates(shop_id: int, _: User = Depends(get_current_user), session: Session = Depends(get_session)):
+def shop_last_rates(shop_id: int, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     from app.models import LastSaleRate
 
+    shop = session.get(Shop, shop_id)
+    if current_user.role == UserRole.ORDER_BOOKER and (not shop or shop.assigned_order_booker_id != current_user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Shop is outside your route")
     rates = session.exec(select(LastSaleRate).where(LastSaleRate.shop_id == shop_id)).all()
     result = []
     for rate in rates:
@@ -605,9 +615,10 @@ def shop_last_rates(shop_id: int, _: User = Depends(get_current_user), session: 
 def list_rates(
     shop_id: int | None = None,
     sku_id: int | None = None,
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    forbid_order_booker(current_user)
     query = select(ShopRateRule)
     if shop_id:
         query = query.where(ShopRateRule.shop_id == shop_id)
@@ -650,24 +661,27 @@ def update_rate(
 
 
 @router.get("/rates/{rate_id}/history")
-def rate_history(rate_id: int, _: User = Depends(get_current_user), session: Session = Depends(get_session)):
+def rate_history(rate_id: int, _: User = Depends(require_roles(UserRole.OWNER, UserRole.ACCOUNTANT)), session: Session = Depends(get_session)):
     return session.exec(
         select(AuditLog).where(AuditLog.entity_type == "rate_rule", AuditLog.entity_id == rate_id).order_by(AuditLog.created_at.desc())
     ).all()
 
 
 @router.get("/rates/shop/{shop_id}/sku/{sku_id}")
-def get_rate_context(shop_id: int, sku_id: int, _: User = Depends(get_current_user), session: Session = Depends(get_session)):
+def get_rate_context(shop_id: int, sku_id: int, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     from app.models import LastSaleRate
 
     sku = session.get(SKU, sku_id)
+    shop = session.get(Shop, shop_id)
+    if current_user.role == UserRole.ORDER_BOOKER and (not shop or shop.assigned_order_booker_id != current_user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Shop is outside your route")
     fixed = session.exec(
         select(ShopRateRule)
         .where(ShopRateRule.shop_id == shop_id, ShopRateRule.sku_id == sku_id, ShopRateRule.is_active == True)  # noqa: E712
         .order_by(ShopRateRule.effective_from.desc())
     ).first()
     last = session.exec(select(LastSaleRate).where(LastSaleRate.shop_id == shop_id, LastSaleRate.sku_id == sku_id)).first()
-    return {
+    data = {
         "sku_id": sku_id,
         "shop_id": shop_id,
         "default_sale_rate": sku.default_sale_rate if sku else 0,
@@ -675,6 +689,9 @@ def get_rate_context(shop_id: int, sku_id: int, _: User = Depends(get_current_us
         "fixed_sale_rate": fixed.fixed_sale_rate if fixed else None,
         "last_sale_rate": last.rate if last else None,
     }
+    if current_user.role == UserRole.ORDER_BOOKER:
+        data.pop("minimum_sale_rate", None)
+    return data
 
 
 @router.get("/expenses")
@@ -685,6 +702,7 @@ def list_expenses(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    forbid_order_booker(current_user)
     query = select(Expense).where(Expense.is_deleted == False)  # noqa: E712
     scoped = scoped_warehouse_id(current_user, warehouse_id)
     if scoped:

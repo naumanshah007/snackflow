@@ -16,7 +16,7 @@ from app.models import utc_now
 router = APIRouter(tags=["sales"])
 
 
-def _sale_row(session: Session, sale: Sale) -> dict:
+def _sale_row(session: Session, sale: Sale, current_user: User) -> dict:
     shop = session.get(Shop, sale.shop_id)
     warehouse = session.get(Warehouse, sale.warehouse_id)
     data = sale.model_dump()
@@ -34,12 +34,24 @@ def _sale_row(session: Session, sale: Sale) -> dict:
         item_data["loose_packets"] = loose
         item_data["carton_label"] = carton_label(item.quantity_packets, pack_quantity)
         item_data["sale_rate_per_carton"] = round(item.sale_rate * pack_quantity, 2)
+        if current_user.role == UserRole.ORDER_BOOKER:
+            for internal_key in ("cost_rate", "line_profit"):
+                item_data.pop(internal_key, None)
         data["items"].append(item_data)
     data["returns"] = []
     for sale_return in session.exec(select(SaleReturn).where(SaleReturn.sale_id == sale.id).order_by(SaleReturn.return_date.desc())).all():
         return_data = sale_return.model_dump()
         return_data["items"] = [item.model_dump() for item in session.exec(select(SaleReturnItem).where(SaleReturnItem.sale_return_id == sale_return.id)).all()]
+        if current_user.role == UserRole.ORDER_BOOKER:
+            for internal_key in ("cogs_amount", "profit_amount"):
+                return_data.pop(internal_key, None)
+            for return_item in return_data["items"]:
+                for internal_key in ("cost_rate", "line_profit"):
+                    return_item.pop(internal_key, None)
         data["returns"].append(return_data)
+    if current_user.role == UserRole.ORDER_BOOKER:
+        for internal_key in ("cogs_amount", "gross_profit"):
+            data.pop(internal_key, None)
     return data
 
 
@@ -73,12 +85,13 @@ def list_sales(
     if date_to:
         query = query.where(Sale.sale_date <= datetime.combine(date_to, time.max))
     sales = session.exec(query.order_by(Sale.sale_date.desc()).offset(offset).limit(limit)).all()
-    return [_sale_row(session, sale) for sale in sales]
+    return [_sale_row(session, sale, current_user) for sale in sales]
 
 
 @router.post("/sales")
 def post_sale(payload: SaleCreate, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    return create_sale(session, payload, current_user)
+    sale = create_sale(session, payload, current_user)
+    return _sale_row(session, sale, current_user)
 
 
 @router.get("/sales/{sale_id}")
@@ -88,7 +101,7 @@ def get_sale(sale_id: int, current_user: User = Depends(get_current_user), sessi
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sale not found")
     if current_user.role == UserRole.ORDER_BOOKER and sale.order_booker_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sale is outside your scope")
-    return _sale_row(session, sale)
+    return _sale_row(session, sale, current_user)
 
 
 @router.put("/sales/{sale_id}")
@@ -107,17 +120,19 @@ def update_sale(sale_id: int, payload: SaleUpdate, current_user: User = Depends(
     write_audit(session, current_user, "UPDATE", "sale", sale.id, old, model_snapshot(sale))
     session.commit()
     session.refresh(sale)
-    return sale
+    return _sale_row(session, sale, current_user)
 
 
 @router.post("/sales/{sale_id}/confirm")
 def confirm(sale_id: int, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    return confirm_sale(session, sale_id, current_user)
+    sale = confirm_sale(session, sale_id, current_user)
+    return _sale_row(session, sale, current_user)
 
 
 @router.post("/sales/{sale_id}/cancel")
 def cancel(sale_id: int, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    return cancel_sale(session, sale_id, current_user)
+    sale = cancel_sale(session, sale_id, current_user)
+    return _sale_row(session, sale, current_user)
 
 
 @router.post("/sales/{sale_id}/reverse")
@@ -127,7 +142,8 @@ def reverse(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    return reverse_sale(session, sale_id, payload, current_user)
+    sale = reverse_sale(session, sale_id, payload, current_user)
+    return _sale_row(session, sale, current_user)
 
 
 @router.post("/sales/{sale_id}/return")
@@ -137,7 +153,8 @@ def partial_return(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    return return_sale_items(session, sale_id, payload, current_user)
+    sale = return_sale_items(session, sale_id, payload, current_user)
+    return _sale_row(session, sale, current_user)
 
 
 @router.post("/payments")
@@ -165,7 +182,19 @@ def list_payments(
     session: Session = Depends(get_session),
 ):
     query = select(Payment)
+    if current_user.role == UserRole.ORDER_BOOKER:
+        assigned_shop_ids = [
+            shop.id
+            for shop in session.exec(select(Shop).where(Shop.assigned_order_booker_id == current_user.id)).all()
+            if shop.id is not None
+        ]
+        if not assigned_shop_ids:
+            return []
+        query = query.where(Payment.shop_id.in_(assigned_shop_ids))
     if shop_id:
+        shop = session.get(Shop, shop_id)
+        if current_user.role == UserRole.ORDER_BOOKER and (not shop or shop.assigned_order_booker_id != current_user.id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Shop is outside your route")
         query = query.where(Payment.shop_id == shop_id)
     payments = session.exec(query.order_by(Payment.payment_date.desc()).limit(500)).all()
     return payments
@@ -173,6 +202,9 @@ def list_payments(
 
 @router.get("/shops/{shop_id}/payments")
 def shop_payments(shop_id: int, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    shop = session.get(Shop, shop_id)
+    if current_user.role == UserRole.ORDER_BOOKER and (not shop or shop.assigned_order_booker_id != current_user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Shop is outside your route")
     return session.exec(select(Payment).where(Payment.shop_id == shop_id).order_by(Payment.payment_date.desc())).all()
 
 

@@ -82,8 +82,21 @@ export const navGroups: { title: string | null; items: NavItem[] }[] = [
   }
 ];
 
-export function Sidebar() {
+export function visibleNavGroups(role?: string | null) {
+  if (role === "ORDER_BOOKER") {
+    return [
+      {
+        title: null,
+        items: [{ href: "/mobile", label: "Order Booker", icon: MapPin }]
+      }
+    ];
+  }
+  return navGroups;
+}
+
+export function Sidebar({ role }: { role?: string | null }) {
   const pathname = usePathname();
+  const groups = visibleNavGroups(role);
   return (
     <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-72 flex-col overflow-y-auto border-r border-white/10 bg-slate-950 px-4 py-5 text-white shadow-premium lg:flex">
       <div className="rounded-xl border border-white/10 bg-white p-3 shadow-lift">
@@ -94,7 +107,7 @@ export function Sidebar() {
       </div>
 
       <nav className="mt-5 space-y-5 pb-4">
-        {navGroups.map((group, groupIndex) => (
+        {groups.map((group, groupIndex) => (
           <div key={group.title ?? `group-${groupIndex}`}>
             {group.title && <div className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{group.title}</div>}
             <div className="space-y-1">

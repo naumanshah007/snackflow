@@ -7,10 +7,18 @@ export default function UsersPage() {
     <ResourcePage
       title="Users & Roles"
       endpoint="/users"
+      description="Admin can reset order booker passwords from here. Leave password blank if you do not want to change it."
       fields={[
         { name: "name", label: "Name", required: true },
         { name: "username", label: "Username", required: true },
-        { name: "password", label: "Password", type: "password", requiredOnCreate: true },
+        {
+          name: "password",
+          label: "Password reset",
+          type: "password",
+          requiredOnCreate: true,
+          placeholder: "Leave blank to keep existing password. Enter new password to reset.",
+          helpText: "Leave blank to keep existing password. Enter new password to reset."
+        },
         { name: "phone", label: "Phone" },
         {
           name: "role",

@@ -2,8 +2,8 @@
 
 Stock, Sales, Shop Ledger & Distribution Management System
 
-Version: 1.1  
-Date: 16 June 2026  
+Version: 1.2
+Date: 28 June 2026
 Prepared for: Zaib Brothers — Business Owner / Admin
 
 SnackFlow is the system name; Zaib Brothers is the business name.
@@ -35,6 +35,8 @@ SnackFlow is the system name; Zaib Brothers is the business name.
 23. App vs Link, and Costs
 24. Monthly Closing & Archive
 25. 2026-06-15 Feedback Update
+26. 2026-06-21 Feedback Update
+27. 2026-06-28 Live Feedback Update
 
 ## 1. Cover Page
 
@@ -73,6 +75,8 @@ Can receive stock, view assigned warehouse stock, check stock ledger, view low s
 
 Can login on mobile, see assigned shops, see shop pending balance, create sale/order, see available stock, see last sale rate, see fixed shop rate, collect payment, mark shop closed/no order, and capture GPS location.
 
+Order bookers cannot see cost price, stock value at cost, COGS, gross profit, net profit, expenses, internal ledgers, reports, monthly closing, reset-data, users, or admin control pages.
+
 ### Accountant / Viewer
 
 Can view sales, expenses, shop ledgers, payments, profit reports, and exports where allowed.
@@ -84,7 +88,7 @@ Open the app in a browser:
 - Admin web app: `http://localhost:3000`
 - Mobile route workflow: `/mobile`
 
-Login with your own username and password. The seeded admin login is `admin / admin123`; change this password before production use.
+Login with your own username and password. The seeded admin login is for local demo only; change demo passwords before production use.
 
 The sidebar contains Dashboard, Products, SKUs, Rates, Warehouses, Inventory, Stock Receive, Stock Ledger, Shops, Sales, Payments, Expenses, Reports, Users, Mobile, and Settings.
 
@@ -139,6 +143,8 @@ Shop fields include shop name, owner name, phone, alternate phone, address, area
 Use Capture GPS to save the shop's current location. Use Open Map to check the shop in Google Maps.
 
 GPS is important because if the order booker changes, the new order booker can still find the shop.
+
+Shops added by an order booker appear as **PENDING APPROVAL**. On the Shops page, use the status filters to open **Pending Approval**, then click **Approve** to make the shop active or **Reject** to reject it. Pending shops cannot be used for orders or payment collection until approved.
 
 ### Route Days (weekly route planning)
 
@@ -314,6 +320,9 @@ Evening:
 | Order booker cannot see shop | Check shop assignment. |
 | Order booker cannot see stock | Check warehouse assignment. |
 | Pending balance seems wrong | Open shop ledger and review sale/payment/reversal entries. |
+| Owner forgot password | System maintainer runs the private owner recovery script; do not share passwords in public chat. |
+| New shop is pending | Admin opens Shops → Pending Approval and approves or rejects it. |
+| Order booker sees admin pages | Log out and update to the latest deployment; order booker accounts should redirect to `/mobile`. |
 
 ## 19. Security and Best Practices
 
@@ -326,6 +335,9 @@ Evening:
 - Backup database.
 - Run monthly closing only after downloading and checking the backup.
 - Review audit logs.
+- If an owner forgets the password, use the maintainer-only password recovery process. Never send passwords in public chat.
+- Owners can reset order booker passwords from Users. Leave the password blank to keep the current password.
+- Order booker accounts must not see cost/profit or admin/reporting pages.
 
 ## 20. Glossary
 
@@ -416,3 +428,17 @@ Three more requests from the client retest were added:
 **Correct a wrongly-entered payment.** On the **Payments** page, an owner or accountant clicks **Void / correct** next to the payment, types a reason, then enters the correct payment. The wrong payment is not deleted — it is marked **Voided**, its amount is added back to the shop's balance, and it stops counting in collection and recovery reports. History is preserved.
 
 **Start fresh (clear demo/test data).** An owner opens **Settings → Start fresh**, picks how much to clear (transactions only / transactions + shops / everything except logins), and types `RESET` to confirm. This removes the sample/test sales, stock and profit so you can begin entering real data. It cannot be undone, so use it only before going live.
+
+## 27. 2026-06-28 Live Feedback Update
+
+This version addresses the live owner/admin lockout and order-booker visibility feedback.
+
+**Owner password recovery.** If the owner forgets the password and no owner can log in, the system maintainer runs the private recovery script documented in `docs/ops/PASSWORD_RECOVERY.md`. The script uses production `DATABASE_URL`, `RESET_OWNER_USERNAME`, and `RESET_OWNER_PASSWORD`, does not print the password, and writes an audit entry. After login, the owner should change the temporary password in Settings.
+
+**Admin resets booker passwords.** Open **Users & Roles**, edit the order booker, and use the Password reset field. Leave it blank to keep the existing password. Enter a new password only when resetting it.
+
+**Pending shop approval.** Open **Shops**, click **Pending Approval**, then approve or reject the shop. Pending shops show a clear badge, assigned order booker, assigned warehouse, route days, GPS/map status, and edit controls.
+
+**Order-booker restriction.** Order bookers are redirected to `/mobile` and cannot open admin pages such as Reports, Control Center, Stock Ledger, Expenses, Monthly Closing, Users, Settings, reset-data, or supplier returns. Backend APIs also block or redact these fields, so hiding the menu is not the only protection.
+
+**Cost/profit rule.** Order bookers only see selling and collection information: assigned shops, route, available stock in cartons, sale rates, pending balances, payment collection, and GPS. Cost price, COGS, stock value at cost, gross profit, net profit, and internal ledgers are hidden.

@@ -14,6 +14,7 @@ from app.models import (
     SaleStatus,
     Shop,
     ShopRateRule,
+    ShopStatus,
     User,
     UserRole,
     utc_now,
@@ -49,6 +50,8 @@ def create_sale(session: Session, payload: SaleCreate, user: User) -> Sale:
     shop = session.get(Shop, payload.shop_id)
     if not shop or not shop.is_active:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shop not found or inactive")
+    if shop.status != ShopStatus.ACTIVE:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Shop is pending approval and cannot be used for sales yet")
 
     warehouse_id = payload.warehouse_id or shop.assigned_warehouse_id or user.assigned_warehouse_id
     if not warehouse_id:

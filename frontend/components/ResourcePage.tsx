@@ -26,7 +26,8 @@ export function ResourcePage({
   columns,
   historyEndpoint,
   exportFilename,
-  exportColumns
+  exportColumns,
+  description
 }: {
   title: string;
   endpoint: string;
@@ -35,6 +36,7 @@ export function ResourcePage({
   historyEndpoint?: (row: AnyRow) => string;
   exportFilename?: string;
   exportColumns?: CsvColumn[];
+  description?: string;
 }) {
   const [rows, setRows] = useState<AnyRow[]>([]);
   const [form, setForm] = useState<AnyRow>({});
@@ -136,7 +138,7 @@ export function ResourcePage({
       reset();
       await loadRows();
       setMessageTone("success");
-      setMessage(wasEditing ? "Saved — changes recorded with audit history." : "Saved — new record added.");
+      setMessage(wasEditing && typeof payload.password === "string" && payload.password.trim() ? "Password updated successfully." : wasEditing ? "Saved — changes recorded with audit history." : "Saved — new record added.");
     } catch (error) {
       showError(error instanceof Error ? error.message : "Save failed");
     }
@@ -150,7 +152,7 @@ export function ResourcePage({
             <div>
               <div className="eyebrow">Master data</div>
               <h1 className="mt-1 text-2xl font-bold text-slate-950">{title}</h1>
-              <p className="mt-1 max-w-2xl text-sm text-slate-500">Edit operational records with audit history preserved for price, rate, and ledger-sensitive changes.</p>
+              <p className="mt-1 max-w-2xl text-sm text-slate-500">{description || "Edit operational records with audit history preserved for price, rate, and ledger-sensitive changes."}</p>
             </div>
             <div className="flex gap-2">
               {exportColumns && (
@@ -245,8 +247,9 @@ export function ResourcePage({
                         onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))}
                       />
                     )}
-                    {field.type === "password" && editing && (
-                      <span className="mt-1 block text-xs text-slate-500">Type a new password here to reset it, or leave blank to keep the current one.</span>
+                    {field.helpText && <span className="mt-1 block text-xs text-slate-500">{field.helpText}</span>}
+                    {!field.helpText && field.type === "password" && editing && (
+                      <span className="mt-1 block text-xs text-slate-500">Leave blank to keep existing password. Enter new password to reset.</span>
                     )}
                   </label>
                 );

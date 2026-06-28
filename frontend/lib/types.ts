@@ -19,6 +19,7 @@ export type FieldConfig = {
   optionLabelKey?: string;
   optionValueKey?: string;
   placeholder?: string;
+  helpText?: string;
 };
 
 export type ColumnConfig = {

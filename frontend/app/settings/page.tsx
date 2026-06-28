@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff, Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { AdminShell } from "@/components/AdminShell";
@@ -19,7 +19,12 @@ export default function SettingsPage() {
   const [me, setMe] = useState<AnyRow | null>(null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"success" | "error">("success");
   const [resetScope, setResetScope] = useState("transactions");
   const [resetConfirm, setResetConfirm] = useState("");
   const [resetMessage, setResetMessage] = useState("");
@@ -61,12 +66,25 @@ export default function SettingsPage() {
   const changePassword = async (event: React.FormEvent) => {
     event.preventDefault();
     setMessage("");
+    if (newPassword.length < 6) {
+      setMessageTone("error");
+      setMessage("New password must be at least 6 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setMessageTone("error");
+      setMessage("New password and confirm password do not match.");
+      return;
+    }
     try {
       await apiFetch("/auth/change-password", { method: "POST", body: { current_password: currentPassword, new_password: newPassword } });
       setCurrentPassword("");
       setNewPassword("");
-      setMessage("Password changed");
+      setConfirmPassword("");
+      setMessageTone("success");
+      setMessage("Password changed successfully. Please use the new password next time.");
     } catch (error) {
+      setMessageTone("error");
       setMessage(error instanceof Error ? error.message : "Password change failed");
     }
   };
@@ -77,16 +95,36 @@ export default function SettingsPage() {
         <div className="space-y-5">
         <form onSubmit={changePassword} className="premium-panel p-4">
           <h1 className="font-semibold text-slate-950">Account security</h1>
-          <p className="mb-4 text-sm text-slate-500">Change the current user password.</p>
+          <p className="mb-4 text-sm text-slate-500">Save your new password safely. If forgotten, owner recovery must be done by system maintainer.</p>
           <label className="block">
             <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Current password</span>
-            <input type="password" className="field" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required />
+            <span className="flex rounded-md border border-slate-200 bg-white shadow-sm focus-within:ring-2 focus-within:ring-orange-200">
+              <input type={showCurrentPassword ? "text" : "password"} className="min-w-0 flex-1 rounded-l-md px-3 py-2 outline-none" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required />
+              <button type="button" onClick={() => setShowCurrentPassword((value) => !value)} className="px-3 text-slate-500" aria-label={showCurrentPassword ? "Hide current password" : "Show current password"}>
+                {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </span>
           </label>
           <label className="mt-3 block">
             <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">New password</span>
-            <input type="password" className="field" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required minLength={6} />
+            <span className="flex rounded-md border border-slate-200 bg-white shadow-sm focus-within:ring-2 focus-within:ring-orange-200">
+              <input type={showNewPassword ? "text" : "password"} className="min-w-0 flex-1 rounded-l-md px-3 py-2 outline-none" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required minLength={6} />
+              <button type="button" onClick={() => setShowNewPassword((value) => !value)} className="px-3 text-slate-500" aria-label={showNewPassword ? "Hide new password" : "Show new password"}>
+                {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </span>
           </label>
-          {message && <div className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">{message}</div>}
+          <label className="mt-3 block">
+            <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Confirm new password</span>
+            <span className="flex rounded-md border border-slate-200 bg-white shadow-sm focus-within:ring-2 focus-within:ring-orange-200">
+              <input type={showConfirmPassword ? "text" : "password"} className="min-w-0 flex-1 rounded-l-md px-3 py-2 outline-none" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required minLength={6} />
+              <button type="button" onClick={() => setShowConfirmPassword((value) => !value)} className="px-3 text-slate-500" aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}>
+                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </span>
+          </label>
+          <p className="mt-3 text-xs text-slate-500">Your old password remains valid until this form saves successfully.</p>
+          {message && <div className={`mt-3 rounded-md border px-3 py-2 text-sm ${messageTone === "success" ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-800"}`}>{message}</div>}
           <button className="btn-dark mt-4 w-full">
             <Save size={18} /> Save password
           </button>

@@ -38,6 +38,7 @@ export default function MobilePage() {
   const skuMap = useMemo(() => new Map(skus.map((sku) => [String(sku.id), sku])), [skus]);
   const stockMap = useMemo(() => new Map(inventory.map((row) => [String(row.sku_id), row])), [inventory]);
   const selectedShop = shops.find((shop) => String(shop.id) === selectedShopId);
+  const isSelectedShopPending = selectedShop?.status === "PENDING_APPROVAL";
   const filteredShops = shops.filter((shop) => `${shop.name} ${shop.area_route || ""} ${shop.phone || ""}`.toLowerCase().includes(search.toLowerCase()));
 
   const load = async () => {
@@ -294,6 +295,9 @@ export default function MobilePage() {
           </div>
         )}
         {message && <div className="mt-3 rounded-md border border-orange-100 bg-orange-50 px-3 py-2 text-sm text-orange-800">{message}</div>}
+        <div className="mt-3 rounded-md border border-slate-200 bg-white/85 px-3 py-2 text-xs text-slate-600">
+          Order booker only sees selling and collection information. Cost/profit is hidden.
+        </div>
       </header>
 
       <section key={tab} className="mx-auto max-w-3xl px-4 py-4" style={{ animation: "rise-in 0.28s ease both" }}>
@@ -364,10 +368,20 @@ export default function MobilePage() {
                   </div>
                 </button>
                 <div className="mt-4 grid grid-cols-3 gap-2">
-                  <button type="button" onClick={() => { setSelectedShopId(String(shop.id)); setTab("order"); }} className="rounded-xl bg-orange-600 px-3 py-3 text-sm font-semibold text-white shadow-lift transition active:scale-95">
-                    Order
+                  <button
+                    type="button"
+                    disabled={shop.status === "PENDING_APPROVAL"}
+                    onClick={() => { setSelectedShopId(String(shop.id)); setTab("order"); }}
+                    className="rounded-xl bg-orange-600 px-3 py-3 text-sm font-semibold text-white shadow-lift transition active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none"
+                  >
+                    {shop.status === "PENDING_APPROVAL" ? "Pending" : "Order"}
                   </button>
-                  <button type="button" onClick={() => { setSelectedShopId(String(shop.id)); setTab("payment"); }} className="rounded-xl bg-green-600 px-3 py-3 text-sm font-semibold text-white shadow-lift transition active:scale-95">
+                  <button
+                    type="button"
+                    disabled={shop.status === "PENDING_APPROVAL"}
+                    onClick={() => { setSelectedShopId(String(shop.id)); setTab("payment"); }}
+                    className="rounded-xl bg-green-600 px-3 py-3 text-sm font-semibold text-white shadow-lift transition active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none"
+                  >
                     Collect
                   </button>
                   {shop.gps_latitude && shop.gps_longitude ? (
@@ -386,6 +400,11 @@ export default function MobilePage() {
         )}
 
         {tab === "order" && (
+          isSelectedShopPending ? (
+            <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800 shadow-premium">
+              Pending Approval. Admin must approve this shop before orders can be booked.
+            </div>
+          ) : (
           <form onSubmit={saveOrder} className="space-y-3">
             {lines.map((line, index) => {
               const stock = stockMap.get(line.sku_id);
@@ -445,9 +464,15 @@ export default function MobilePage() {
               <Save size={20} /> Book order
             </button>
           </form>
+          )
         )}
 
         {tab === "payment" && (
+          isSelectedShopPending ? (
+            <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800 shadow-premium">
+              Pending Approval. Admin must approve this shop before payment collection is posted.
+            </div>
+          ) : (
           <div className="space-y-3">
             {summary && (
               <div className="rounded-lg border border-white/80 bg-white/95 p-4 shadow-premium backdrop-blur">
@@ -472,6 +497,7 @@ export default function MobilePage() {
               </button>
             </form>
           </div>
+          )
         )}
 
         {tab === "newshop" && (

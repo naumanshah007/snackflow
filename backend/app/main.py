@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.database import create_db_and_tables
+from app.database import assert_persistent_database_for_non_development, create_db_and_tables
 from app.routers import admin, auth, monthly_closing, reports, sales, stock
 
 app = FastAPI(title="SnackFlow API", version="0.1.0")
@@ -25,6 +25,7 @@ app.include_router(monthly_closing.router)
 
 @app.on_event("startup")
 def on_startup() -> None:
+    assert_persistent_database_for_non_development()
     if settings.auto_seed_demo:
         from app.seed import seed
 

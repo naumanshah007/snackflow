@@ -33,6 +33,11 @@ def require_roles(*roles: UserRole) -> Callable[[User], User]:
     return dependency
 
 
+def forbid_order_booker(user: User) -> None:
+    if user.role == UserRole.ORDER_BOOKER:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+
+
 def scoped_warehouse_id(user: User, requested_warehouse_id: int | None) -> int | None:
     if user.role == UserRole.ORDER_BOOKER:
         return user.assigned_warehouse_id

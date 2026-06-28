@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ChevronRight, LogOut, Menu, Search, Smartphone, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { Sidebar, navGroups } from "@/components/Sidebar";
+import { Sidebar, visibleNavGroups } from "@/components/Sidebar";
 import { Logo } from "@/components/Logo";
 import { apiFetch, clearToken, getToken } from "@/lib/api";
 
@@ -28,9 +28,14 @@ export function AdminShell({ title, children }: { title: string; children: React
       return;
     }
     apiFetch<User>("/auth/me")
-      .then(setUser)
+      .then((currentUser) => {
+        setUser(currentUser);
+        if (currentUser.role === "ORDER_BOOKER" && pathname !== "/mobile") {
+          router.replace("/mobile");
+        }
+      })
       .catch(() => router.replace("/login"));
-  }, [router]);
+  }, [pathname, router]);
 
   // Close the mobile drawer whenever the route changes.
   useEffect(() => {
@@ -42,9 +47,27 @@ export function AdminShell({ title, children }: { title: string; children: React
     router.replace("/login");
   };
 
+  const groups = visibleNavGroups(user?.role);
+
+  if (!user) {
+    return (
+      <main className="app-bg flex min-h-screen items-center justify-center px-4 text-sm font-semibold text-slate-600">
+        Loading...
+      </main>
+    );
+  }
+
+  if (user?.role === "ORDER_BOOKER" && pathname !== "/mobile") {
+    return (
+      <main className="app-bg flex min-h-screen items-center justify-center px-4 text-sm font-semibold text-slate-600">
+        Redirecting to mobile...
+      </main>
+    );
+  }
+
   return (
     <div className="app-bg min-h-screen">
-      <Sidebar />
+      <Sidebar role={user?.role} />
       <header className="no-print sticky top-0 z-20 border-b border-white/70 bg-white/75 backdrop-blur-xl lg:ml-72">
         <div className="flex min-h-[4.5rem] items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex items-center gap-3">
@@ -100,7 +123,7 @@ export function AdminShell({ title, children }: { title: string; children: React
               </button>
             </div>
             <div className="mt-5 space-y-5">
-              {navGroups.map((group, groupIndex) => (
+              {groups.map((group, groupIndex) => (
                 <div key={group.title ?? `m-${groupIndex}`}>
                   {group.title && <div className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{group.title}</div>}
                   <div className="space-y-1">

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, or_, select
 
 from app.database import get_session
-from app.dependencies import assert_warehouse_scope, get_current_user, require_roles, scoped_warehouse_id
+from app.dependencies import assert_warehouse_scope, forbid_order_booker, get_current_user, require_roles, scoped_warehouse_id
 from app.carton import carton_label, split_cartons
 from app.models import InventoryBalance, MovementType, Product, SKU, StockLedger, StockReceipt, StockReceiptItem, User, UserRole, Warehouse
 from app.schemas import StockAdjustmentCreate, StockReceiptCreate, SupplierReturnCreate
@@ -31,6 +31,7 @@ def list_stock_receipts(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    forbid_order_booker(current_user)
     query = select(StockReceipt)
     scoped = scoped_warehouse_id(current_user, warehouse_id)
     if scoped:
@@ -102,13 +103,18 @@ def get_inventory(
                 "cartons": cartons,
                 "loose_packets": loose_packets,
                 "carton_label": carton_label(balance.quantity_packets, pack_quantity),
-                "average_cost_per_packet": round(balance.average_cost_per_packet, 2),
-                "average_cost_per_carton": round(balance.average_cost_per_packet * pack_quantity, 2),
-                "stock_value": round(balance.quantity_packets * balance.average_cost_per_packet, 2),
                 "low_stock": balance.quantity_packets <= sku.low_stock_threshold,
                 "low_stock_threshold": sku.low_stock_threshold,
             }
         )
+        if current_user.role != UserRole.ORDER_BOOKER:
+            rows[-1].update(
+                {
+                    "average_cost_per_packet": round(balance.average_cost_per_packet, 2),
+                    "average_cost_per_carton": round(balance.average_cost_per_packet * pack_quantity, 2),
+                    "stock_value": round(balance.quantity_packets * balance.average_cost_per_packet, 2),
+                }
+            )
     return rows
 
 
@@ -120,6 +126,7 @@ def get_stock_ledger(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    forbid_order_booker(current_user)
     query = select(StockLedger)
     scoped = scoped_warehouse_id(current_user, warehouse_id)
     if scoped:
@@ -177,6 +184,7 @@ def list_supplier_returns(
     session: Session = Depends(get_session),
 ):
     """Recent supplier returns, read from the stock ledger (carton-first)."""
+    forbid_order_booker(current_user)
     query = select(StockLedger).where(StockLedger.movement_type == MovementType.SUPPLIER_RETURN_OUT)
     scoped = scoped_warehouse_id(current_user, warehouse_id)
     if scoped:

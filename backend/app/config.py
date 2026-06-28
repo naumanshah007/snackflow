@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     initial_admin_password: str | None = None
     monthly_archive_enabled: bool = False
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property
     def cors_origins(self) -> list[str]:

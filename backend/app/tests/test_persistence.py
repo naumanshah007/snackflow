@@ -155,6 +155,8 @@ def test_admin_can_reset_user_password(client, seed_ids):
     # A blank/omitted password leaves the existing one intact.
     client.put(f"/users/{seed_ids['booker']}", json={"phone": "0301", "password": None}, headers=headers)
     assert client.post("/auth/login", data={"username": "booker1", "password": "booker123"}).status_code == 200
+    client.put(f"/users/{seed_ids['booker']}", json={"password": ""}, headers=headers)
+    assert client.post("/auth/login", data={"username": "booker1", "password": "booker123"}).status_code == 200
 
     # Admin sets a new password; the new one works and the old one stops working.
     updated = client.put(f"/users/{seed_ids['booker']}", json={"password": "fresh456"}, headers=headers)

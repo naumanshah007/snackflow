@@ -1,7 +1,7 @@
 from fastapi import HTTPException, status
 from sqlmodel import Session
 
-from app.models import LedgerEntryType, Payment, Shop, User, utc_now
+from app.models import LedgerEntryType, Payment, Shop, ShopStatus, User, UserRole, utc_now
 from app.schemas import PaymentCreate
 from app.services.audit import write_audit
 from app.services.ledger import add_shop_ledger_entry
@@ -11,6 +11,10 @@ def create_payment(session: Session, payload: PaymentCreate, user: User) -> Paym
     shop = session.get(Shop, payload.shop_id)
     if not shop or not shop.is_active:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shop not found or inactive")
+    if shop.status != ShopStatus.ACTIVE:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Shop is pending approval and cannot receive payments yet")
+    if user.role == UserRole.ORDER_BOOKER and shop.assigned_order_booker_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Shop is outside this order booker's assigned route")
     payment = Payment(
         shop_id=payload.shop_id,
         amount=payload.amount,

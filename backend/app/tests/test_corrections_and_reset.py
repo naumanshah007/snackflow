@@ -140,3 +140,10 @@ def test_reset_requires_confirmation_and_owner(client, seed_ids):
 
     booker = auth_headers(client, "booker1", "booker123")
     assert client.post("/reset-data", json={"scope": "transactions", "confirm": "RESET"}, headers=booker).status_code == 403
+
+
+def test_reset_delete_order_handles_sale_rate_foreign_key():
+    from app.models import LastSaleRate, Sale
+    from app.services.maintenance import _TRANSACTION_MODELS
+
+    assert _TRANSACTION_MODELS.index(LastSaleRate) < _TRANSACTION_MODELS.index(Sale)
